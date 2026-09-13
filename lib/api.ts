@@ -3,12 +3,17 @@ const FRAPPE_URL = process.env.NEXT_PUBLIC_FRAPPE_URL || "http://localhost:8002"
 function extractErrorMessage(status: number, body: string): string {
 	try {
 		const parsed = JSON.parse(body);
-		if (typeof parsed.message === "string") return parsed.message;
+		// _server_messages (msgprint-raised errors, e.g. our own frappe.throw calls) is the
+		// most reliable source - check it first. `message` alone can be a stray leftover from
+		// unrelated request handling (e.g. Frappe sets a login-status "message" during session
+		// setup that has nothing to do with this request) and must not take priority when a
+		// real error is also present.
 		if (parsed._server_messages) {
 			const messages = JSON.parse(parsed._server_messages) as string[];
 			const first = JSON.parse(messages[0]);
 			if (first.message) return first.message;
 		}
+		if (typeof parsed.message === "string") return parsed.message;
 		if (parsed.exception) return String(parsed.exception).split("\n").pop() || parsed.exception;
 	} catch {
 		// fall through to raw body
