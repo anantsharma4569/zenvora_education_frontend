@@ -50,7 +50,17 @@ async function callMethod<T>(
 	return json.message as T;
 }
 
-import type { CourseRow, DashboardData, EmployeeAttendanceRow, EmployeeRow, Session, StudentAttendanceRow } from "./types";
+import type {
+	CourseRow,
+	DashboardData,
+	EmployeeAttendanceRow,
+	EmployeeRow,
+	FeeRow,
+	ResultRow,
+	Session,
+	StudentAttendanceRow,
+	StudentRow,
+} from "./types";
 
 export const api = {
 	getSession: () => callMethod<Session>("zenvora_education.api.auth.get_session"),
@@ -95,4 +105,16 @@ export const api = {
 
 	createCourse: (params: { course_name: string; department?: string; description?: string }) =>
 		callMethod("zenvora_education.api.course.create_course", params, { method: "POST" }),
+
+	listStudents: (params?: { search?: string }) =>
+		callMethod<StudentRow[]>("zenvora_education.api.student.list_students", params),
+
+	getResults: (params?: { student_group?: string }) =>
+		callMethod<ResultRow[]>("zenvora_education.api.exam.get_results", params),
+
+	getMyResults: () => callMethod<ResultRow[]>("zenvora_education.api.exam.get_my_results"),
+
+	getFees: (params?: { student?: string }) => callMethod<FeeRow[]>("zenvora_education.api.fees.get_fees", params),
+
+	getMyFees: () => callMethod<FeeRow[]>("zenvora_education.api.fees.get_my_fees"),
 };

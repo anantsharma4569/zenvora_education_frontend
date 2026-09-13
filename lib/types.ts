@@ -49,3 +49,34 @@ export interface CourseRow {
 	course_name: string;
 	department: string;
 }
+
+export interface StudentRow {
+	name: string;
+	student_name: string;
+	student_email_id?: string;
+	enabled: number;
+}
+
+export interface ResultRow {
+	name: string;
+	student: string;
+	student_name: string;
+	student_group: string;
+	course: string;
+	program: string;
+	academic_year: string;
+	total_score: number;
+	maximum_score: number;
+	grade: string;
+}
+
+export interface FeeRow {
+	name: string;
+	student: string;
+	student_name: string;
+	program: string;
+	due_date: string;
+	posting_date: string;
+	grand_total: number;
+	outstanding_amount: number;
+}
