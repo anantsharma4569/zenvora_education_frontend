@@ -1,5 +1,10 @@
 export type Role = "admin" | "teacher" | "accounts" | "student";
 
+export interface Session {
+	user: string;
+	authenticated: boolean;
+}
+
 export interface DashboardData {
 	role: Role;
 	student_count?: number;

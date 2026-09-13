@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
+import { api } from "@/lib/api";
 import type { Role } from "@/lib/types";
 
 interface NavItem {
@@ -32,7 +33,13 @@ const ROLE_LABEL: Record<Role, string> = {
 export function Sidebar() {
 	const { role, setRole } = useRole();
 	const pathname = usePathname();
+	const router = useRouter();
 	const items = NAV_ITEMS.filter((item) => item.roles.includes(role));
+
+	const handleLogout = async () => {
+		await api.logout().catch(() => undefined);
+		router.replace("/login");
+	};
 
 	return (
 		<aside className="flex h-full w-60 shrink-0 flex-col justify-between border-r border-black/10 bg-white/60 p-4 dark:border-white/10 dark:bg-black/20">
@@ -77,6 +84,12 @@ export function Sidebar() {
 						</option>
 					))}
 				</select>
+				<button
+					onClick={handleLogout}
+					className="mt-3 w-full rounded-md border border-black/10 px-3 py-2 text-left text-sm text-black/70 hover:bg-black/5 dark:border-white/10 dark:text-white/70 dark:hover:bg-white/10"
+				>
+					Log out
+				</button>
 			</div>
 		</aside>
 	);

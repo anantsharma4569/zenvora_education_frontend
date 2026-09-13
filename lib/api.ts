@@ -1,4 +1,20 @@
-const FRAPPE_URL = process.env.NEXT_PUBLIC_FRAPPE_URL || "http://school.localhost:8000";
+const FRAPPE_URL = process.env.NEXT_PUBLIC_FRAPPE_URL || "http://localhost:8002";
+
+function extractErrorMessage(status: number, body: string): string {
+	try {
+		const parsed = JSON.parse(body);
+		if (typeof parsed.message === "string") return parsed.message;
+		if (parsed._server_messages) {
+			const messages = JSON.parse(parsed._server_messages) as string[];
+			const first = JSON.parse(messages[0]);
+			if (first.message) return first.message;
+		}
+		if (parsed.exception) return String(parsed.exception).split("\n").pop() || parsed.exception;
+	} catch {
+		// fall through to raw body
+	}
+	return `Request failed (${status})`;
+}
 
 async function callMethod<T>(
 	method: string,
@@ -27,16 +43,22 @@ async function callMethod<T>(
 	const response = await fetch(url.toString(), init);
 	if (!response.ok) {
 		const body = await response.text();
-		throw new Error(`${method} failed (${response.status}): ${body}`);
+		throw new Error(extractErrorMessage(response.status, body));
 	}
 
 	const json = await response.json();
 	return json.message as T;
 }
 
-import type { CourseRow, DashboardData, EmployeeAttendanceRow, EmployeeRow, StudentAttendanceRow } from "./types";
+import type { CourseRow, DashboardData, EmployeeAttendanceRow, EmployeeRow, Session, StudentAttendanceRow } from "./types";
 
 export const api = {
+	getSession: () => callMethod<Session>("zenvora_education.api.auth.get_session"),
+
+	login: (usr: string, pwd: string) => callMethod<string>("login", { usr, pwd }, { method: "POST" }),
+
+	logout: () => callMethod("logout", {}, { method: "POST" }),
+
 	getDashboard: () => callMethod<DashboardData>("zenvora_education.api.dashboard.get_dashboard"),
 
 	getEmployeeAttendance: (params?: { employee?: string; from_date?: string; to_date?: string }) =>
