@@ -98,11 +98,14 @@ export const api = {
 		callMethod<EmployeeRow[]>("zenvora_education.api.employee.list_employees", params),
 
 	createEmployee: (params: {
-		employee_name: string;
+		first_name: string;
+		gender: string;
+		date_of_birth: string;
 		department: string;
 		designation: string;
 		date_of_joining: string;
 		company: string;
+		last_name?: string;
 		personal_email?: string;
 		is_instructor?: boolean;
 	}) => callMethod("zenvora_education.api.employee.create_employee", params, { method: "POST" }),

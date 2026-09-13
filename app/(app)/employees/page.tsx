@@ -8,8 +8,13 @@ import { SectionPage } from "@/components/SectionPage";
 import { SubmitButton, inputClass } from "@/components/FormControls";
 import type { EmployeeRow } from "@/lib/types";
 
+const GENDER_OPTIONS = ["Male", "Female", "Other"];
+
 const emptyForm = {
-	employee_name: "",
+	first_name: "",
+	last_name: "",
+	gender: "",
+	date_of_birth: "",
 	department: "",
 	designation: "",
 	date_of_joining: "",
@@ -65,10 +70,37 @@ export default function EmployeesPage() {
 					<input
 						required
 						autoFocus
-						placeholder="Employee Name"
+						placeholder="First Name"
 						className={inputClass}
-						value={form.employee_name}
-						onChange={(e) => setForm({ ...form, employee_name: e.target.value })}
+						value={form.first_name}
+						onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+					/>
+					<input
+						placeholder="Last Name"
+						className={inputClass}
+						value={form.last_name}
+						onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+					/>
+					<select
+						required
+						className={inputClass}
+						value={form.gender}
+						onChange={(e) => setForm({ ...form, gender: e.target.value })}
+					>
+						<option value="">Select Gender...</option>
+						{GENDER_OPTIONS.map((g) => (
+							<option key={g} value={g}>
+								{g}
+							</option>
+						))}
+					</select>
+					<input
+						required
+						type="date"
+						placeholder="Date of Birth"
+						className={inputClass}
+						value={form.date_of_birth}
+						onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
 					/>
 					<input
 						required
