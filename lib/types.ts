@@ -73,10 +73,50 @@ export interface ResultRow {
 export interface ProgramRow {
 	name: string;
 	program_name: string;
+	department?: string;
 }
 
 export interface AcademicYearRow {
 	name: string;
+	year_start_date?: string;
+	year_end_date?: string;
+}
+
+export interface DepartmentRow {
+	name: string;
+	department_name: string;
+	company: string;
+}
+
+export interface AcademicTermRow {
+	name: string;
+	academic_year: string;
+	term_name: string;
+	term_start_date: string;
+	term_end_date: string;
+}
+
+export interface StudentGroupRow {
+	name: string;
+	student_group_name: string;
+	program: string;
+	academic_year: string;
+	academic_term?: string;
+	max_strength: number;
+	disabled: number;
+}
+
+export interface FeeCategoryRow {
+	name: string;
+	category_name: string;
+}
+
+export interface FeeStructureRow {
+	name: string;
+	program: string;
+	academic_year: string;
+	academic_term?: string;
+	total_amount: number;
 }
 
 export interface FeeRow {

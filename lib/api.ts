@@ -51,16 +51,21 @@ async function callMethod<T>(
 }
 
 import type {
+	AcademicTermRow,
 	AcademicYearRow,
 	CourseRow,
 	DashboardData,
+	DepartmentRow,
 	EmployeeAttendanceRow,
 	EmployeeRow,
+	FeeCategoryRow,
 	FeeRow,
+	FeeStructureRow,
 	ProgramRow,
 	ResultRow,
 	Session,
 	StudentAttendanceRow,
+	StudentGroupRow,
 	StudentRow,
 } from "./types";
 
@@ -131,7 +136,52 @@ export const api = {
 		academic_term?: string;
 	}) => callMethod("zenvora_education.api.student.create_student", params, { method: "POST" }),
 
-	listPrograms: () => callMethod<ProgramRow[]>("zenvora_education.api.student.list_programs"),
+	listPrograms: () => callMethod<ProgramRow[]>("zenvora_education.api.settings.list_programs"),
 
-	listAcademicYears: () => callMethod<AcademicYearRow[]>("zenvora_education.api.student.list_academic_years"),
+	createProgram: (params: { program_name: string; department?: string }) =>
+		callMethod("zenvora_education.api.settings.create_program", params, { method: "POST" }),
+
+	listAcademicYears: () => callMethod<AcademicYearRow[]>("zenvora_education.api.settings.list_academic_years"),
+
+	createAcademicYear: (params: { academic_year_name: string; year_start_date: string; year_end_date: string }) =>
+		callMethod("zenvora_education.api.settings.create_academic_year", params, { method: "POST" }),
+
+	listAcademicTerms: (params?: { academic_year?: string }) =>
+		callMethod<AcademicTermRow[]>("zenvora_education.api.settings.list_academic_terms", params),
+
+	createAcademicTerm: (params: {
+		academic_year: string;
+		term_name: string;
+		term_start_date: string;
+		term_end_date: string;
+	}) => callMethod("zenvora_education.api.settings.create_academic_term", params, { method: "POST" }),
+
+	listDepartments: () => callMethod<DepartmentRow[]>("zenvora_education.api.settings.list_departments"),
+
+	createDepartment: (params: { department_name: string; company?: string }) =>
+		callMethod("zenvora_education.api.settings.create_department", params, { method: "POST" }),
+
+	listStudentGroups: () => callMethod<StudentGroupRow[]>("zenvora_education.api.settings.list_student_groups"),
+
+	createStudentGroup: (params: {
+		student_group_name: string;
+		program: string;
+		academic_year: string;
+		academic_term?: string;
+		max_strength?: number;
+	}) => callMethod("zenvora_education.api.settings.create_student_group", params, { method: "POST" }),
+
+	listFeeCategories: () => callMethod<FeeCategoryRow[]>("zenvora_education.api.settings.list_fee_categories"),
+
+	createFeeCategory: (params: { category_name: string }) =>
+		callMethod("zenvora_education.api.settings.create_fee_category", params, { method: "POST" }),
+
+	listFeeStructures: () => callMethod<FeeStructureRow[]>("zenvora_education.api.settings.list_fee_structures"),
+
+	createFeeStructure: (params: {
+		program: string;
+		academic_year: string;
+		academic_term?: string;
+		components: { fees_category: string; amount: number }[];
+	}) => callMethod("zenvora_education.api.settings.create_fee_structure", params, { method: "POST" }),
 };
