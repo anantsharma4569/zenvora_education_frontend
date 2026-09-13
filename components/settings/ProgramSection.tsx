@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { DepartmentRow, ProgramRow } from "@/lib/types";
-import { SetupCard, SubmitButton, inputClass } from "./SetupCard";
+import { DataTable } from "@/components/DataTable";
+import { SectionPage } from "@/components/SectionPage";
+import { SubmitButton, inputClass } from "@/components/FormControls";
 
 export function ProgramSection() {
 	const [rows, setRows] = useState<ProgramRow[]>([]);
@@ -12,6 +14,7 @@ export function ProgramSection() {
 	const [department, setDepartment] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [formOpen, setFormOpen] = useState(false);
 
 	const load = () => api.listPrograms().then(setRows).catch(() => undefined);
 
@@ -30,6 +33,7 @@ export function ProgramSection() {
 			await api.createProgram({ program_name: name, department: department || undefined });
 			setName("");
 			setDepartment("");
+			setFormOpen(false);
 			load();
 		} catch (err) {
 			setError((err as Error).message);
@@ -39,13 +43,19 @@ export function ProgramSection() {
 	};
 
 	return (
-		<SetupCard
+		<SectionPage
 			title="Programs"
+			count={rows.length}
+			description="e.g. Class 1 through Class 12, or degree programs"
+			addLabel="+ Add Program"
+			formOpen={formOpen}
+			onToggleForm={() => setFormOpen((v) => !v)}
 			formError={error}
 			form={
 				<form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
 					<input
 						required
+						autoFocus
 						placeholder="Program Name (e.g. Class 10)"
 						className={`flex-1 ${inputClass}`}
 						value={name}
@@ -59,17 +69,21 @@ export function ProgramSection() {
 							</option>
 						))}
 					</select>
-					<SubmitButton submitting={submitting} label="Add" />
+					<SubmitButton submitting={submitting} label="Save" />
 				</form>
 			}
-			list={
-				<ul className="flex flex-wrap gap-2 text-sm">
-					{rows.map((p) => (
-						<li key={p.name} className="rounded-full border border-black/10 px-3 py-1 dark:border-white/10">
-							{p.program_name}
-						</li>
-					))}
-				</ul>
+			table={
+				<DataTable
+					rows={rows}
+					rowKey={(r) => r.name}
+					searchPlaceholder="Search programs..."
+					searchValue={(r) => r.program_name}
+					emptyLabel="No programs yet."
+					columns={[
+						{ key: "program_name", label: "Program", sortable: true, value: (r) => r.program_name },
+						{ key: "department", label: "Department", value: (r) => r.department || "-" },
+					]}
+				/>
 			}
 		/>
 	);

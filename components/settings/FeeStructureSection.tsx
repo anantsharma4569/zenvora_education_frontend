@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { AcademicYearRow, FeeCategoryRow, FeeStructureRow, ProgramRow } from "@/lib/types";
-import { SetupCard, SubmitButton, inputClass } from "./SetupCard";
+import { DataTable } from "@/components/DataTable";
+import { SectionPage } from "@/components/SectionPage";
+import { SubmitButton, inputClass } from "@/components/FormControls";
 
 interface ComponentRow {
 	fees_category: string;
@@ -23,6 +25,7 @@ export function FeeStructureSection() {
 	const [components, setComponents] = useState<ComponentRow[]>([{ ...emptyComponent }]);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [formOpen, setFormOpen] = useState(false);
 
 	const load = () => api.listFeeStructures().then(setRows).catch(() => undefined);
 
@@ -54,6 +57,7 @@ export function FeeStructureSection() {
 			setProgram("");
 			setAcademicYear("");
 			setComponents([{ ...emptyComponent }]);
+			setFormOpen(false);
 			load();
 		} catch (err) {
 			setError((err as Error).message);
@@ -63,8 +67,12 @@ export function FeeStructureSection() {
 	};
 
 	return (
-		<SetupCard
+		<SectionPage
 			title="Fee Structures"
+			count={rows.length}
+			addLabel="+ Add Fee Structure"
+			formOpen={formOpen}
+			onToggleForm={() => setFormOpen((v) => !v)}
 			formError={error}
 			form={
 				<form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -145,17 +153,22 @@ export function FeeStructureSection() {
 						</p>
 					)}
 
-					<SubmitButton submitting={submitting} label="Create Fee Structure" />
+					<SubmitButton submitting={submitting} label="Save" />
 				</form>
 			}
-			list={
-				<ul className="flex flex-col gap-2 text-sm">
-					{rows.map((fs) => (
-						<li key={fs.name} className="rounded-md border border-black/10 p-2 dark:border-white/10">
-							{fs.program} - {fs.academic_year} - Total: {fs.total_amount}
-						</li>
-					))}
-				</ul>
+			table={
+				<DataTable
+					rows={rows}
+					rowKey={(r) => r.name}
+					searchPlaceholder="Search fee structures..."
+					searchValue={(r) => r.program}
+					emptyLabel="No fee structures yet."
+					columns={[
+						{ key: "program", label: "Program", sortable: true, value: (r) => r.program },
+						{ key: "academic_year", label: "Academic Year", value: (r) => r.academic_year },
+						{ key: "total_amount", label: "Total", sortable: true, value: (r) => r.total_amount },
+					]}
+				/>
 			}
 		/>
 	);

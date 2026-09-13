@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { AcademicTermRow, AcademicYearRow } from "@/lib/types";
-import { SetupCard, SubmitButton, inputClass } from "./SetupCard";
+import { DataTable } from "@/components/DataTable";
+import { SectionPage } from "@/components/SectionPage";
+import { SubmitButton, inputClass } from "@/components/FormControls";
 
 const emptyForm = { academic_year: "", term_name: "", term_start_date: "", term_end_date: "" };
 
@@ -13,6 +15,7 @@ export function AcademicTermSection() {
 	const [form, setForm] = useState(emptyForm);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [formOpen, setFormOpen] = useState(false);
 
 	const load = () => api.listAcademicTerms().then(setRows).catch(() => undefined);
 
@@ -30,6 +33,7 @@ export function AcademicTermSection() {
 		try {
 			await api.createAcademicTerm(form);
 			setForm(emptyForm);
+			setFormOpen(false);
 			load();
 		} catch (err) {
 			setError((err as Error).message);
@@ -39,13 +43,18 @@ export function AcademicTermSection() {
 	};
 
 	return (
-		<SetupCard
+		<SectionPage
 			title="Academic Terms"
+			count={rows.length}
+			addLabel="+ Add Academic Term"
+			formOpen={formOpen}
+			onToggleForm={() => setFormOpen((v) => !v)}
 			formError={error}
 			form={
 				<form onSubmit={handleSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 					<select
 						required
+						autoFocus
 						className={inputClass}
 						value={form.academic_year}
 						onChange={(e) => setForm({ ...form, academic_year: e.target.value })}
@@ -84,18 +93,24 @@ export function AcademicTermSection() {
 						</p>
 					)}
 					<div className="sm:col-span-2">
-						<SubmitButton submitting={submitting} label="Add" />
+						<SubmitButton submitting={submitting} label="Save" />
 					</div>
 				</form>
 			}
-			list={
-				<ul className="flex flex-wrap gap-2 text-sm">
-					{rows.map((t) => (
-						<li key={t.name} className="rounded-full border border-black/10 px-3 py-1 dark:border-white/10">
-							{t.term_name} ({t.academic_year})
-						</li>
-					))}
-				</ul>
+			table={
+				<DataTable
+					rows={rows}
+					rowKey={(r) => r.name}
+					searchPlaceholder="Search academic terms..."
+					searchValue={(r) => r.term_name}
+					emptyLabel="No academic terms yet."
+					columns={[
+						{ key: "term_name", label: "Term", sortable: true, value: (r) => r.term_name },
+						{ key: "academic_year", label: "Academic Year", sortable: true, value: (r) => r.academic_year },
+						{ key: "term_start_date", label: "Start Date", value: (r) => r.term_start_date },
+						{ key: "term_end_date", label: "End Date", value: (r) => r.term_end_date },
+					]}
+				/>
 			}
 		/>
 	);

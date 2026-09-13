@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { AcademicYearRow, ProgramRow, StudentGroupRow } from "@/lib/types";
-import { SetupCard, SubmitButton, inputClass } from "./SetupCard";
+import { DataTable } from "@/components/DataTable";
+import { SectionPage } from "@/components/SectionPage";
+import { SubmitButton, inputClass } from "@/components/FormControls";
 
 const emptyForm = { student_group_name: "", program: "", academic_year: "", max_strength: "" };
 
@@ -14,6 +16,7 @@ export function StudentGroupSection() {
 	const [form, setForm] = useState(emptyForm);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [formOpen, setFormOpen] = useState(false);
 
 	const load = () => api.listStudentGroups().then(setRows).catch(() => undefined);
 
@@ -37,6 +40,7 @@ export function StudentGroupSection() {
 				max_strength: form.max_strength ? Number(form.max_strength) : undefined,
 			});
 			setForm(emptyForm);
+			setFormOpen(false);
 			load();
 		} catch (err) {
 			setError((err as Error).message);
@@ -46,13 +50,19 @@ export function StudentGroupSection() {
 	};
 
 	return (
-		<SetupCard
-			title="Student Groups (Class / Section)"
+		<SectionPage
+			title="Student Groups"
+			count={rows.length}
+			description="Classes / Sections - e.g. Class 10 - A"
+			addLabel="+ Add Student Group"
+			formOpen={formOpen}
+			onToggleForm={() => setFormOpen((v) => !v)}
 			formError={error}
 			form={
 				<form onSubmit={handleSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 					<input
 						required
+						autoFocus
 						placeholder="Group Name (e.g. Class 10 - A)"
 						className={inputClass}
 						value={form.student_group_name}
@@ -97,18 +107,24 @@ export function StudentGroupSection() {
 						</p>
 					)}
 					<div className="sm:col-span-2">
-						<SubmitButton submitting={submitting} label="Add" />
+						<SubmitButton submitting={submitting} label="Save" />
 					</div>
 				</form>
 			}
-			list={
-				<ul className="flex flex-wrap gap-2 text-sm">
-					{rows.map((g) => (
-						<li key={g.name} className="rounded-full border border-black/10 px-3 py-1 dark:border-white/10">
-							{g.student_group_name}
-						</li>
-					))}
-				</ul>
+			table={
+				<DataTable
+					rows={rows}
+					rowKey={(r) => r.name}
+					searchPlaceholder="Search student groups..."
+					searchValue={(r) => r.student_group_name}
+					emptyLabel="No student groups yet."
+					columns={[
+						{ key: "student_group_name", label: "Group", sortable: true, value: (r) => r.student_group_name },
+						{ key: "program", label: "Program", value: (r) => r.program },
+						{ key: "academic_year", label: "Academic Year", value: (r) => r.academic_year },
+						{ key: "max_strength", label: "Max Strength", value: (r) => r.max_strength || "-" },
+					]}
+				/>
 			}
 		/>
 	);

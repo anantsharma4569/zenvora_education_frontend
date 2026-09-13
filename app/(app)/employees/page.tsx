@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingState, ErrorState, EmptyState } from "@/components/DataState";
+import { ErrorState } from "@/components/DataState";
+import { DataTable } from "@/components/DataTable";
+import { SectionPage } from "@/components/SectionPage";
+import { SubmitButton, inputClass } from "@/components/FormControls";
 import type { EmployeeRow } from "@/lib/types";
 
 const emptyForm = {
@@ -17,18 +19,16 @@ const emptyForm = {
 };
 
 export default function EmployeesPage() {
-	const [employees, setEmployees] = useState<EmployeeRow[] | null>(null);
+	const [employees, setEmployees] = useState<EmployeeRow[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	const [formOpen, setFormOpen] = useState(false);
 	const [form, setForm] = useState(emptyForm);
 	const [submitting, setSubmitting] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 
 	const load = () => {
 		setError(null);
-		api
-			.listEmployees()
-			.then(setEmployees)
-			.catch((err) => setError(err.message));
+		api.listEmployees().then(setEmployees).catch((err) => setError(err.message));
 	};
 
 	useEffect(load, []);
@@ -40,6 +40,7 @@ export default function EmployeesPage() {
 		try {
 			await api.createEmployee(form);
 			setForm(emptyForm);
+			setFormOpen(false);
 			load();
 		} catch (err) {
 			setFormError((err as Error).message);
@@ -48,52 +49,59 @@ export default function EmployeesPage() {
 		}
 	};
 
-	return (
-		<div>
-			<PageHeader title="Employees" subtitle="Staff and teacher records" />
+	if (error) return <ErrorState message={error} />;
 
-			<div className="mb-8 rounded-lg border border-black/10 p-4 dark:border-white/10">
-				<h2 className="mb-3 text-sm font-medium">Create Employee</h2>
+	return (
+		<SectionPage
+			title="Employees"
+			count={employees.length}
+			description="Staff and teacher records"
+			addLabel="+ Add Employee"
+			formOpen={formOpen}
+			onToggleForm={() => setFormOpen((v) => !v)}
+			formError={formError}
+			form={
 				<form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 					<input
 						required
+						autoFocus
 						placeholder="Employee Name"
-						className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+						className={inputClass}
 						value={form.employee_name}
 						onChange={(e) => setForm({ ...form, employee_name: e.target.value })}
 					/>
 					<input
 						required
 						placeholder="Department"
-						className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+						className={inputClass}
 						value={form.department}
 						onChange={(e) => setForm({ ...form, department: e.target.value })}
 					/>
 					<input
 						required
 						placeholder="Designation"
-						className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+						className={inputClass}
 						value={form.designation}
 						onChange={(e) => setForm({ ...form, designation: e.target.value })}
 					/>
 					<input
 						required
 						placeholder="Company"
-						className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+						className={inputClass}
 						value={form.company}
 						onChange={(e) => setForm({ ...form, company: e.target.value })}
 					/>
 					<input
 						required
 						type="date"
-						className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+						className={inputClass}
 						value={form.date_of_joining}
 						onChange={(e) => setForm({ ...form, date_of_joining: e.target.value })}
 					/>
 					<input
 						type="email"
 						placeholder="Personal Email"
-						className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+						className={inputClass}
 						value={form.personal_email}
 						onChange={(e) => setForm({ ...form, personal_email: e.target.value })}
 					/>
@@ -106,44 +114,26 @@ export default function EmployeesPage() {
 						This employee is a teacher (also create an Instructor record)
 					</label>
 
-					{formError && <ErrorState message={formError} />}
-
-					<button
-						type="submit"
-						disabled={submitting}
-						className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black sm:col-span-2 sm:w-fit"
-					>
-						{submitting ? "Creating..." : "Create Employee"}
-					</button>
+					<div className="sm:col-span-2">
+						<SubmitButton submitting={submitting} label="Create Employee" />
+					</div>
 				</form>
-			</div>
-
-			<h2 className="mb-3 text-sm font-medium">All Employees</h2>
-			{error && <ErrorState message={error} />}
-			{!error && !employees && <LoadingState />}
-			{!error && employees && employees.length === 0 && <EmptyState label="No employees yet." />}
-			{!error && employees && employees.length > 0 && (
-				<table className="w-full text-left text-sm">
-					<thead className="text-black/50 dark:text-white/50">
-						<tr>
-							<th className="py-2">Name</th>
-							<th className="py-2">Department</th>
-							<th className="py-2">Designation</th>
-							<th className="py-2">Status</th>
-						</tr>
-					</thead>
-					<tbody>
-						{employees.map((emp) => (
-							<tr key={emp.name} className="border-t border-black/10 dark:border-white/10">
-								<td className="py-2">{emp.employee_name}</td>
-								<td className="py-2">{emp.department}</td>
-								<td className="py-2">{emp.designation}</td>
-								<td className="py-2">{emp.status}</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			)}
-		</div>
+			}
+			table={
+				<DataTable
+					rows={employees}
+					rowKey={(e) => e.name}
+					searchPlaceholder="Search employees..."
+					searchValue={(e) => e.employee_name}
+					emptyLabel="No employees yet."
+					columns={[
+						{ key: "employee_name", label: "Name", sortable: true, value: (e) => e.employee_name },
+						{ key: "department", label: "Department", sortable: true, value: (e) => e.department },
+						{ key: "designation", label: "Designation", value: (e) => e.designation },
+						{ key: "status", label: "Status", value: (e) => e.status },
+					]}
+				/>
+			}
+		/>
 	);
 }
