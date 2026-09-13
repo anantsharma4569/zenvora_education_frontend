@@ -70,6 +70,15 @@ export interface ResultRow {
 	grade: string;
 }
 
+export interface ProgramRow {
+	name: string;
+	program_name: string;
+}
+
+export interface AcademicYearRow {
+	name: string;
+}
+
 export interface FeeRow {
 	name: string;
 	student: string;

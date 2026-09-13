@@ -51,11 +51,13 @@ async function callMethod<T>(
 }
 
 import type {
+	AcademicYearRow,
 	CourseRow,
 	DashboardData,
 	EmployeeAttendanceRow,
 	EmployeeRow,
 	FeeRow,
+	ProgramRow,
 	ResultRow,
 	Session,
 	StudentAttendanceRow,
@@ -117,4 +119,19 @@ export const api = {
 	getFees: (params?: { student?: string }) => callMethod<FeeRow[]>("zenvora_education.api.fees.get_fees", params),
 
 	getMyFees: () => callMethod<FeeRow[]>("zenvora_education.api.fees.get_my_fees"),
+
+	createStudent: (params: {
+		first_name: string;
+		student_email_id: string;
+		program: string;
+		academic_year: string;
+		last_name?: string;
+		date_of_birth?: string;
+		gender?: string;
+		academic_term?: string;
+	}) => callMethod("zenvora_education.api.student.create_student", params, { method: "POST" }),
+
+	listPrograms: () => callMethod<ProgramRow[]>("zenvora_education.api.student.list_programs"),
+
+	listAcademicYears: () => callMethod<AcademicYearRow[]>("zenvora_education.api.student.list_academic_years"),
 };
