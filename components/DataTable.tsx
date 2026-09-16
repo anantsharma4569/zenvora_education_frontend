@@ -7,6 +7,7 @@ export interface DataTableColumn<T> {
 	key: string;
 	label: string;
 	sortable?: boolean;
+	align?: "left" | "right";
 	render?: (row: T) => ReactNode;
 	value?: (row: T) => string | number;
 }
@@ -17,20 +18,26 @@ interface DataTableProps<T> {
 	rowKey: (row: T) => string;
 	searchPlaceholder?: string;
 	searchValue?: (row: T) => string;
+	/** Filter pills rendered next to the search field. */
+	filters?: ReactNode;
 	actions?: ReactNode;
 	emptyLabel?: string;
 	pageSize?: number;
+	/** Width below which the table scrolls horizontally instead of squashing. */
+	minWidth?: number;
 }
 
 export function DataTable<T>({
 	columns,
 	rows,
 	rowKey,
-	searchPlaceholder = "Search...",
+	searchPlaceholder = "Search…",
 	searchValue,
+	filters,
 	actions,
 	emptyLabel = "No records found.",
 	pageSize = 10,
+	minWidth = 560,
 }: DataTableProps<T>) {
 	const [search, setSearch] = useState("");
 	const [sortKey, setSortKey] = useState<string | null>(null);
@@ -59,21 +66,20 @@ export function DataTable<T>({
 
 	const toggleSort = (column: DataTableColumn<T>) => {
 		if (!column.sortable || !column.value) return;
-		if (sortKey === column.key) {
-			setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-		} else {
+		if (sortKey === column.key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+		else {
 			setSortKey(column.key);
 			setSortDir("asc");
 		}
 	};
 
 	return (
-		<div>
-			<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+		<div className="rounded-xl border border-line bg-surface px-[18px] pb-3.5 pt-4">
+			<div className="mb-3.5 flex flex-wrap items-center gap-2.5">
 				{searchValue ? (
 					<input
 						placeholder={searchPlaceholder}
-						className="w-full max-w-sm rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+						className="min-w-0 flex-[1_1_210px] rounded-lg border border-black/[0.13] bg-transparent px-3 py-2 text-[13px] outline-none placeholder:text-black/40 focus:border-black/30"
 						value={search}
 						onChange={(e) => {
 							setSearch(e.target.value);
@@ -81,8 +87,9 @@ export function DataTable<T>({
 						}}
 					/>
 				) : (
-					<div />
+					<div className="flex-1" />
 				)}
+				{filters}
 				{actions}
 			</div>
 
@@ -90,15 +97,17 @@ export function DataTable<T>({
 				<EmptyState label={emptyLabel} />
 			) : (
 				<>
-					<div className="overflow-x-auto">
-						<table className="w-full text-left text-sm">
-							<thead className="text-black/50 dark:text-white/50">
+					<div className="-mx-[18px] overflow-x-auto px-[18px]">
+						<table className="w-full text-left text-[13px]" style={{ minWidth }}>
+							<thead>
 								<tr>
 									{columns.map((c) => (
 										<th
 											key={c.key}
 											onClick={() => toggleSort(c)}
-											className={`whitespace-nowrap py-2 pr-4 ${c.sortable ? "cursor-pointer select-none" : ""}`}
+											className={`whitespace-nowrap pb-2.5 pr-4 text-[11px] font-medium uppercase tracking-[0.07em] text-black/40 ${
+												c.align === "right" ? "text-right" : "text-left"
+											} ${c.sortable ? "cursor-pointer select-none hover:text-black/70" : ""}`}
 										>
 											{c.label}
 											{c.sortable && sortKey === c.key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -108,9 +117,14 @@ export function DataTable<T>({
 							</thead>
 							<tbody>
 								{paged.map((row) => (
-									<tr key={rowKey(row)} className="border-t border-black/10 dark:border-white/10">
+									<tr key={rowKey(row)}>
 										{columns.map((c) => (
-											<td key={c.key} className="py-2 pr-4">
+											<td
+												key={c.key}
+												className={`whitespace-nowrap border-t border-line-soft py-2.5 pr-4 tabular-nums ${
+													c.align === "right" ? "text-right" : "text-left"
+												}`}
+											>
 												{c.render ? c.render(row) : c.value ? c.value(row) : null}
 											</td>
 										))}
@@ -120,7 +134,7 @@ export function DataTable<T>({
 						</table>
 					</div>
 
-					<div className="mt-3 flex items-center justify-between text-xs text-black/50 dark:text-white/50">
+					<div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-3 text-xs text-black/50">
 						<span>
 							Showing {paged.length} of {sorted.length}
 						</span>
@@ -129,7 +143,7 @@ export function DataTable<T>({
 								<button
 									disabled={clampedPage === 0}
 									onClick={() => setPage((p) => Math.max(0, p - 1))}
-									className="rounded-md border border-black/10 px-2 py-1 disabled:opacity-40 dark:border-white/10"
+									className="rounded-md border border-black/[0.12] px-2.5 py-1 disabled:opacity-45"
 								>
 									Prev
 								</button>
@@ -139,7 +153,7 @@ export function DataTable<T>({
 								<button
 									disabled={clampedPage >= totalPages - 1}
 									onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-									className="rounded-md border border-black/10 px-2 py-1 disabled:opacity-40 dark:border-white/10"
+									className="rounded-md border border-black/[0.12] px-2.5 py-1 hover:bg-black/[0.04] disabled:opacity-45"
 								>
 									Next
 								</button>
