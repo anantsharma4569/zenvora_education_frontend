@@ -28,22 +28,37 @@ export default function StudentsPage() {
 
 	const [programs, setPrograms] = useState<ProgramRow[]>([]);
 	const [academicYears, setAcademicYears] = useState<AcademicYearRow[]>([]);
+	const [classFilter, setClassFilter] = useState("");
 	const [form, setForm] = useState(emptyForm);
 	const [submitting, setSubmitting] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 
 	const loadStudents = () => {
 		setError(null);
-		api.listStudents().then(setStudents).catch((err) => setError(err.message));
+		api
+			.listStudents({ program: classFilter || undefined })
+			.then(setStudents)
+			.catch((err) => setError(err.message));
 	};
 
-	useEffect(loadStudents, []);
+	useEffect(loadStudents, [classFilter]);
+
+	useEffect(() => {
+		if (role !== "admin" && role !== "accounts") return;
+		api.listPrograms().then(setPrograms).catch(() => undefined);
+	}, [role]);
 
 	useEffect(() => {
 		if (role !== "admin") return;
-		api.listPrograms().then(setPrograms).catch(() => undefined);
 		api.listAcademicYears().then(setAcademicYears).catch(() => undefined);
 	}, [role]);
+
+	// "Grade 10" should sort after "Grade 9", not between "Grade 1" and "Grade 2".
+	const sortedPrograms = [...programs].sort((a, b) => {
+		const na = parseInt(a.program_name.match(/\d+/)?.[0] ?? "0", 10);
+		const nb = parseInt(b.program_name.match(/\d+/)?.[0] ?? "0", 10);
+		return na - nb || a.program_name.localeCompare(b.program_name);
+	});
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -83,7 +98,23 @@ export default function StudentsPage() {
 			rowKey={(s) => s.name}
 			searchPlaceholder="Search by name..."
 			searchValue={role === "admin" || role === "accounts" ? (s) => s.student_name : undefined}
-			emptyLabel="No students found."
+			emptyLabel={classFilter ? "No students found in this class." : "No students found."}
+			filters={
+				(role === "admin" || role === "accounts") && sortedPrograms.length > 0 ? (
+					<select
+						className={inputClass}
+						value={classFilter}
+						onChange={(e) => setClassFilter(e.target.value)}
+					>
+						<option value="">All classes</option>
+						{sortedPrograms.map((p) => (
+							<option key={p.name} value={p.name}>
+								{p.program_name}
+							</option>
+						))}
+					</select>
+				) : undefined
+			}
 			columns={[
 				{ key: "student_name", label: "Name", sortable: true, value: (s) => s.student_name },
 				{ key: "student_email_id", label: "Email", value: (s) => s.student_email_id || "-" },
