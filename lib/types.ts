@@ -16,6 +16,31 @@ export interface DashboardData {
 	student?: string;
 	student_groups?: string[];
 	attendance_summary?: { status: string; count: number }[];
+	attendance_by_group?: { name: string; pct: number }[];
+	attendance_trend?: { date: string; rate: number }[];
+	grade_distribution?: { label: string; value: number }[];
+	fees_summary?: {
+		billed: number;
+		collected: number;
+		outstanding: number;
+		overdue: number;
+		unpaid_students: number;
+	};
+	staff_today?: {
+		present: number;
+		on_leave: number;
+		absent_unapproved: number;
+		unmarked: number;
+	};
+	exam_summary?: {
+		pass_rate: number;
+		median_score: number;
+		below_40: number;
+		total_results: number;
+		published_groups: number;
+		total_groups: number;
+	};
+	low_attendance_count?: number;
 }
 
 export interface EmployeeAttendanceRow {
