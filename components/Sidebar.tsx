@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
@@ -31,21 +30,10 @@ const ROLE_LABEL: Record<Role, string> = {
 	student: "Student",
 };
 
-/** Below this width the sidebar becomes a sticky top bar with a scrolling nav. */
-const BREAKPOINT = 760;
-
 export function Sidebar() {
 	const { role, setRole } = useRole();
 	const pathname = usePathname();
 	const router = useRouter();
-	const [narrow, setNarrow] = useState(false);
-
-	useEffect(() => {
-		const onResize = () => setNarrow(window.innerWidth < BREAKPOINT);
-		onResize();
-		window.addEventListener("resize", onResize);
-		return () => window.removeEventListener("resize", onResize);
-	}, []);
 
 	const items = NAV_ITEMS.filter((item) => item.roles.includes(role));
 
@@ -81,45 +69,45 @@ export function Sidebar() {
 		</div>
 	);
 
-	if (narrow) {
-		return (
-			<aside className="sticky top-0 z-10 flex flex-col gap-3 border-b border-line bg-surface px-4 py-3.5">
-				{brand}
-				<nav className="flex gap-1 overflow-x-auto pb-0.5">{items.map(link)}</nav>
-			</aside>
-		);
-	}
-
 	return (
-		<aside className="flex h-full w-[236px] shrink-0 flex-col justify-between border-r border-line bg-surface p-[20px_14px]">
-			<div>
+		<>
+			{/* Narrow / mobile: sticky top bar with a horizontally scrolling nav. */}
+			<aside className="sticky top-0 z-10 flex w-full min-w-0 flex-col gap-3 border-b border-line bg-surface px-4 py-3.5 md:hidden">
 				{brand}
-				<nav className="mt-[22px] flex flex-col gap-0.5">{items.map(link)}</nav>
-			</div>
+				<nav className="flex min-w-0 gap-1 overflow-x-auto pb-0.5">{items.map(link)}</nav>
+			</aside>
 
-			{/* Demo-only role switcher: real role comes from the Frappe session server-side. */}
-			<div className="border-t border-line pt-3.5">
-				<label className="block px-2.5 pb-1.5 text-[10px] uppercase tracking-[0.08em] text-black/40">
-					Preview as (demo)
-				</label>
-				<select
-					className="mx-1 w-[calc(100%-8px)] rounded-[7px] border border-black/[0.12] bg-transparent px-2.5 py-1.5 text-[13px]"
-					value={role}
-					onChange={(e) => setRole(e.target.value as Role)}
-				>
-					{Object.entries(ROLE_LABEL).map(([value, label]) => (
-						<option key={value} value={value}>
-							{label}
-						</option>
-					))}
-				</select>
-				<button
-					onClick={handleLogout}
-					className="mx-1 mt-2.5 w-[calc(100%-8px)] rounded-[7px] border border-black/[0.12] px-2.5 py-2 text-[13px] text-black/70 hover:bg-black/[0.04]"
-				>
-					Log out
-				</button>
-			</div>
-		</aside>
+			{/* Wide / desktop: fixed-width left sidebar. */}
+			<aside className="hidden h-full w-[236px] shrink-0 flex-col justify-between border-r border-line bg-surface p-[20px_14px] md:flex">
+				<div>
+					{brand}
+					<nav className="mt-[22px] flex flex-col gap-0.5">{items.map(link)}</nav>
+				</div>
+
+				{/* Demo-only role switcher: real role comes from the Frappe session server-side. */}
+				<div className="border-t border-line pt-3.5">
+					<label className="block px-2.5 pb-1.5 text-[10px] uppercase tracking-[0.08em] text-black/40">
+						Preview as (demo)
+					</label>
+					<select
+						className="mx-1 w-[calc(100%-8px)] rounded-[7px] border border-black/[0.12] bg-transparent px-2.5 py-1.5 text-[13px]"
+						value={role}
+						onChange={(e) => setRole(e.target.value as Role)}
+					>
+						{Object.entries(ROLE_LABEL).map(([value, label]) => (
+							<option key={value} value={value}>
+								{label}
+							</option>
+						))}
+					</select>
+					<button
+						onClick={handleLogout}
+						className="mx-1 mt-2.5 w-[calc(100%-8px)] rounded-[7px] border border-black/[0.12] px-2.5 py-2 text-[13px] text-black/70 hover:bg-black/[0.04]"
+					>
+						Log out
+					</button>
+				</div>
+			</aside>
+		</>
 	);
 }
