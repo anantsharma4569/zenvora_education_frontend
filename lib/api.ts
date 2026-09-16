@@ -69,6 +69,7 @@ import type {
 	ProgramRow,
 	ResultRow,
 	Session,
+	StaffMember,
 	StudentAttendanceRow,
 	StudentGroupRow,
 	StudentRow,
@@ -114,6 +115,12 @@ export const api = {
 		personal_email?: string;
 		is_instructor?: boolean;
 	}) => callMethod("zenvora_education.api.employee.create_employee", params, { method: "POST" }),
+
+	getStaffDirectory: (company?: string) =>
+		callMethod<{ teaching_staff: StaffMember[]; non_teaching_staff: StaffMember[] }>(
+			"zenvora_education.api.staff.get_staff_directory",
+			company ? { company } : {},
+		).then((res) => ({ teachingStaff: res.teaching_staff, nonTeachingStaff: res.non_teaching_staff })),
 
 	listCourses: (params?: { department?: string }) =>
 		callMethod<CourseRow[]>("zenvora_education.api.course.list_courses", params),

@@ -43,6 +43,14 @@ export interface DashboardData {
 	low_attendance_count?: number;
 }
 
+export interface StaffMember {
+	employee: string;
+	employee_name: string;
+	designation: string;
+	department: string;
+	is_teaching_role: boolean;
+}
+
 export interface EmployeeAttendanceRow {
 	name: string;
 	employee: string;
