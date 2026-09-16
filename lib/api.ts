@@ -128,7 +128,7 @@ export const api = {
 	createCourse: (params: { course_name: string; department?: string; description?: string }) =>
 		callMethod("zenvora_education.api.course.create_course", params, { method: "POST" }),
 
-	listStudents: (params?: { search?: string; program?: string }) =>
+	listStudents: (params?: { search?: string; program?: string; student_group?: string }) =>
 		callMethod<StudentRow[]>("zenvora_education.api.student.list_students", params),
 
 	getResults: (params?: { student_group?: string }) =>

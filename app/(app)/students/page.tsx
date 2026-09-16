@@ -8,7 +8,7 @@ import { ErrorState } from "@/components/DataState";
 import { DataTable } from "@/components/DataTable";
 import { SectionPage } from "@/components/SectionPage";
 import { SubmitButton, inputClass } from "@/components/FormControls";
-import type { AcademicYearRow, ProgramRow, StudentRow } from "@/lib/types";
+import type { AcademicYearRow, ProgramRow, StudentGroupRow, StudentRow } from "@/lib/types";
 
 const emptyForm = {
 	first_name: "",
@@ -27,8 +27,10 @@ export default function StudentsPage() {
 	const [formOpen, setFormOpen] = useState(false);
 
 	const [programs, setPrograms] = useState<ProgramRow[]>([]);
+	const [studentGroups, setStudentGroups] = useState<StudentGroupRow[]>([]);
 	const [academicYears, setAcademicYears] = useState<AcademicYearRow[]>([]);
 	const [classFilter, setClassFilter] = useState("");
+	const [sectionFilter, setSectionFilter] = useState("");
 	const [form, setForm] = useState(emptyForm);
 	const [submitting, setSubmitting] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
@@ -36,16 +38,22 @@ export default function StudentsPage() {
 	const loadStudents = () => {
 		setError(null);
 		api
-			.listStudents({ program: classFilter || undefined })
+			.listStudents({ program: classFilter || undefined, student_group: sectionFilter || undefined })
 			.then(setStudents)
 			.catch((err) => setError(err.message));
 	};
 
-	useEffect(loadStudents, [classFilter]);
+	useEffect(loadStudents, [classFilter, sectionFilter]);
+
+	// Section only makes sense within a class - drop it whenever the class changes.
+	useEffect(() => {
+		setSectionFilter("");
+	}, [classFilter]);
 
 	useEffect(() => {
 		if (role !== "admin" && role !== "accounts") return;
 		api.listPrograms().then(setPrograms).catch(() => undefined);
+		api.listStudentGroups().then(setStudentGroups).catch(() => undefined);
 	}, [role]);
 
 	useEffect(() => {
@@ -59,6 +67,10 @@ export default function StudentsPage() {
 		const nb = parseInt(b.program_name.match(/\d+/)?.[0] ?? "0", 10);
 		return na - nb || a.program_name.localeCompare(b.program_name);
 	});
+
+	const sectionsForClass = studentGroups
+		.filter((g) => g.program === classFilter)
+		.sort((a, b) => a.student_group_name.localeCompare(b.student_group_name));
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -98,21 +110,45 @@ export default function StudentsPage() {
 			rowKey={(s) => s.name}
 			searchPlaceholder="Search by name..."
 			searchValue={role === "admin" || role === "accounts" ? (s) => s.student_name : undefined}
-			emptyLabel={classFilter ? "No students found in this class." : "No students found."}
+			emptyLabel={
+				sectionFilter
+					? "No students found in this section."
+					: classFilter
+						? "No students found in this class."
+						: "No students found."
+			}
 			filters={
 				(role === "admin" || role === "accounts") && sortedPrograms.length > 0 ? (
-					<select
-						className={inputClass}
-						value={classFilter}
-						onChange={(e) => setClassFilter(e.target.value)}
-					>
-						<option value="">All classes</option>
-						{sortedPrograms.map((p) => (
-							<option key={p.name} value={p.name}>
-								{p.program_name}
-							</option>
-						))}
-					</select>
+					<>
+						<select
+							className={inputClass}
+							value={classFilter}
+							onChange={(e) => setClassFilter(e.target.value)}
+						>
+							<option value="">All classes</option>
+							{sortedPrograms.map((p) => (
+								<option key={p.name} value={p.name}>
+									{p.program_name}
+								</option>
+							))}
+						</select>
+						{classFilter && sectionsForClass.length > 0 && (
+							<select
+								className={inputClass}
+								value={sectionFilter}
+								onChange={(e) => setSectionFilter(e.target.value)}
+							>
+								<option value="">All sections</option>
+								{sectionsForClass.map((g) => (
+									<option key={g.name} value={g.name}>
+										{g.student_group_name.startsWith(`${classFilter} - `)
+											? `Section ${g.student_group_name.slice(classFilter.length + 3)}`
+											: g.student_group_name}
+									</option>
+								))}
+							</select>
+						)}
+					</>
 				) : undefined
 			}
 			columns={[
