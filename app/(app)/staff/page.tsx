@@ -6,7 +6,7 @@ import { ErrorState } from "@/components/DataState";
 import { DataTable } from "@/components/DataTable";
 import { SectionPage } from "@/components/SectionPage";
 import { SubmitButton, inputClass } from "@/components/FormControls";
-import type { EmployeeRow } from "@/lib/types";
+import type { StaffMember } from "@/lib/types";
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 
@@ -23,8 +23,16 @@ const emptyForm = {
 	is_instructor: false,
 };
 
-export default function EmployeesPage() {
-	const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+const COLUMNS = [
+	{ key: "employee_name", label: "Name", sortable: true, value: (s: StaffMember) => s.employee_name },
+	{ key: "department", label: "Department", sortable: true, value: (s: StaffMember) => s.department },
+	{ key: "designation", label: "Designation", value: (s: StaffMember) => s.designation },
+];
+
+export default function StaffPage() {
+	const [teachingStaff, setTeachingStaff] = useState<StaffMember[]>([]);
+	const [nonTeachingStaff, setNonTeachingStaff] = useState<StaffMember[]>([]);
+	const [tab, setTab] = useState<"teaching" | "non-teaching">("teaching");
 	const [error, setError] = useState<string | null>(null);
 	const [formOpen, setFormOpen] = useState(false);
 	const [form, setForm] = useState(emptyForm);
@@ -33,7 +41,13 @@ export default function EmployeesPage() {
 
 	const load = () => {
 		setError(null);
-		api.listEmployees().then(setEmployees).catch((err) => setError(err.message));
+		api
+			.getStaffDirectory()
+			.then(({ teachingStaff, nonTeachingStaff }) => {
+				setTeachingStaff(teachingStaff);
+				setNonTeachingStaff(nonTeachingStaff);
+			})
+			.catch((err) => setError(err.message));
 	};
 
 	useEffect(load, []);
@@ -56,12 +70,14 @@ export default function EmployeesPage() {
 
 	if (error) return <ErrorState message={error} />;
 
+	const rows = tab === "teaching" ? teachingStaff : nonTeachingStaff;
+
 	return (
 		<SectionPage
-			title="Employees"
-			count={employees.length}
-			description="Staff and teacher records"
-			addLabel="+ Add Employee"
+			title="Staff"
+			count={teachingStaff.length + nonTeachingStaff.length}
+			description="Teaching and non-teaching staff records"
+			addLabel="+ Add Staff"
 			formOpen={formOpen}
 			onToggleForm={() => setFormOpen((v) => !v)}
 			formError={formError}
@@ -147,24 +163,41 @@ export default function EmployeesPage() {
 					</label>
 
 					<div className="sm:col-span-2">
-						<SubmitButton submitting={submitting} label="Create Employee" />
+						<SubmitButton submitting={submitting} label="Create Staff Member" />
 					</div>
 				</form>
 			}
 			table={
-				<DataTable
-					rows={employees}
-					rowKey={(e) => e.name}
-					searchPlaceholder="Search employees..."
-					searchValue={(e) => e.employee_name}
-					emptyLabel="No employees yet."
-					columns={[
-						{ key: "employee_name", label: "Name", sortable: true, value: (e) => e.employee_name },
-						{ key: "department", label: "Department", sortable: true, value: (e) => e.department },
-						{ key: "designation", label: "Designation", value: (e) => e.designation },
-						{ key: "status", label: "Status", value: (e) => e.status },
-					]}
-				/>
+				<div>
+					<div className="mb-4 flex gap-2 border-b border-black/10 dark:border-white/10">
+						{(
+							[
+								["teaching", `Teaching Staff (${teachingStaff.length})`],
+								["non-teaching", `Non-Teaching Staff (${nonTeachingStaff.length})`],
+							] as const
+						).map(([key, label]) => (
+							<button
+								key={key}
+								onClick={() => setTab(key)}
+								className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+									tab === key
+										? "border-black text-black dark:border-white dark:text-white"
+										: "border-transparent text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white"
+								}`}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+					<DataTable
+						rows={rows}
+						rowKey={(s) => s.employee}
+						searchPlaceholder={`Search ${tab === "teaching" ? "teaching" : "non-teaching"} staff...`}
+						searchValue={(s) => s.employee_name}
+						emptyLabel={tab === "teaching" ? "No teaching staff yet." : "No non-teaching staff yet."}
+						columns={COLUMNS}
+					/>
+				</div>
 			}
 		/>
 	);

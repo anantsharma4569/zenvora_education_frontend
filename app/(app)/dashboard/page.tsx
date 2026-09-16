@@ -121,7 +121,7 @@ export default function DashboardPage() {
 			tone: "neutral",
 			title: `${staff.on_leave} staff member${staff.on_leave === 1 ? "" : "s"} on approved leave today`,
 			meta: "Staff",
-			href: "/employees",
+			href: "/staff",
 		});
 	}
 
@@ -286,7 +286,7 @@ export default function DashboardPage() {
 				</Card>
 
 				<Card>
-					<CardHead title="Staff today" action={<Link href="/employees" className={LINK}>Employees →</Link>} />
+					<CardHead title="Staff today" action={<Link href="/staff" className={LINK}>Staff →</Link>} />
 					<p className="mb-4 mt-1.5 text-[12.5px] text-black/50">
 						{NUM.format(data.employee_count ?? 0)} employees · {NUM.format(data.instructor_count ?? 0)} instructors
 					</p>
