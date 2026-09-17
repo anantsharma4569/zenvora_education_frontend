@@ -1,8 +1,14 @@
 const FRAPPE_URL = process.env.NEXT_PUBLIC_FRAPPE_URL || "http://localhost:8002";
 
-function extractErrorMessage(status: number, body: string): string {
+function extractErrorMessage(status: number, body: string): { message: string; sessionExpired: boolean } {
 	try {
 		const parsed = JSON.parse(body);
+		// Frappe sets this explicit flag when the request had no valid session - surface it
+		// distinctly from a normal validation error, since "please log in again" is a very
+		// different fix from "here's what was wrong with the form".
+		if (parsed.session_expired) {
+			return { message: "Your session has expired. Please log in again.", sessionExpired: true };
+		}
 		// _server_messages (msgprint-raised errors, e.g. our own frappe.throw calls) is the
 		// most reliable source - check it first. `message` alone can be a stray leftover from
 		// unrelated request handling (e.g. Frappe sets a login-status "message" during session
@@ -11,14 +17,16 @@ function extractErrorMessage(status: number, body: string): string {
 		if (parsed._server_messages) {
 			const messages = JSON.parse(parsed._server_messages) as string[];
 			const first = JSON.parse(messages[0]);
-			if (first.message) return first.message;
+			if (first.message) return { message: first.message, sessionExpired: false };
 		}
-		if (typeof parsed.message === "string") return parsed.message;
-		if (parsed.exception) return String(parsed.exception).split("\n").pop() || parsed.exception;
+		if (typeof parsed.message === "string") return { message: parsed.message, sessionExpired: false };
+		if (parsed.exception) {
+			return { message: String(parsed.exception).split("\n").pop() || parsed.exception, sessionExpired: false };
+		}
 	} catch {
 		// fall through to raw body
 	}
-	return `Request failed (${status})`;
+	return { message: `Request failed (${status})`, sessionExpired: false };
 }
 
 async function callMethod<T>(
@@ -48,7 +56,11 @@ async function callMethod<T>(
 	const response = await fetch(url.toString(), init);
 	if (!response.ok) {
 		const body = await response.text();
-		throw new Error(extractErrorMessage(response.status, body));
+		const { message, sessionExpired } = extractErrorMessage(response.status, body);
+		if (sessionExpired && typeof window !== "undefined" && window.location.pathname !== "/login") {
+			window.location.href = "/login";
+		}
+		throw new Error(message);
 	}
 
 	const json = await response.json();
