@@ -3,6 +3,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/DataState";
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
 export interface DataTableColumn<T> {
 	key: string;
 	label: string;
@@ -43,6 +45,7 @@ export function DataTable<T>({
 	const [sortKey, setSortKey] = useState<string | null>(null);
 	const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 	const [page, setPage] = useState(0);
+	const [rowsPerPage, setRowsPerPage] = useState(pageSize);
 
 	const filtered = useMemo(() => {
 		if (!search || !searchValue) return rows;
@@ -60,9 +63,9 @@ export function DataTable<T>({
 		return withValues.map((w) => w.row);
 	}, [filtered, sortKey, sortDir, columns]);
 
-	const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+	const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
 	const clampedPage = Math.min(page, totalPages - 1);
-	const paged = sorted.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize);
+	const paged = sorted.slice(clampedPage * rowsPerPage, clampedPage * rowsPerPage + rowsPerPage);
 
 	const toggleSort = (column: DataTableColumn<T>) => {
 		if (!column.sortable || !column.value) return;
@@ -135,9 +138,28 @@ export function DataTable<T>({
 					</div>
 
 					<div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-3 text-xs text-black/50">
-						<span>
-							Showing {paged.length} of {sorted.length}
-						</span>
+						<div className="flex items-center gap-2">
+							<span>
+								Showing {paged.length} of {sorted.length}
+							</span>
+							<label className="flex items-center gap-1.5">
+								<span>·</span>
+								<select
+									value={rowsPerPage}
+									onChange={(e) => {
+										setRowsPerPage(Number(e.target.value));
+										setPage(0);
+									}}
+									className="rounded-md border border-black/[0.12] bg-transparent px-1.5 py-1 text-xs"
+								>
+									{PAGE_SIZE_OPTIONS.map((size) => (
+										<option key={size} value={size}>
+											{size} per page
+										</option>
+									))}
+								</select>
+							</label>
+						</div>
 						{totalPages > 1 && (
 							<div className="flex items-center gap-2">
 								<button
