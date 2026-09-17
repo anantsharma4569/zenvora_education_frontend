@@ -3,10 +3,13 @@ const FRAPPE_URL = process.env.NEXT_PUBLIC_FRAPPE_URL || "http://localhost:8002"
 function extractErrorMessage(status: number, body: string): { message: string; sessionExpired: boolean } {
 	try {
 		const parsed = JSON.parse(body);
-		// Frappe sets this explicit flag when the request had no valid session - surface it
-		// distinctly from a normal validation error, since "please log in again" is a very
-		// different fix from "here's what was wrong with the form".
-		if (parsed.session_expired) {
+		// Frappe sets this explicit flag when the request had no valid session. Separately,
+		// a request whose cookie no longer resolves to a real user (e.g. Redis/session cache
+		// cleared by a backend restart) fails whitelisting entirely: status 403, exc_type
+		// PermissionError, no session_expired flag, and often a *second*, more useful message
+		// buried behind a generic "User None not found" one - both cases mean the same thing:
+		// "please log in again", not "here's what was wrong with the form".
+		if (parsed.session_expired || (status === 403 && parsed.exc_type === "PermissionError")) {
 			return { message: "Your session has expired. Please log in again.", sessionExpired: true };
 		}
 		// _server_messages (msgprint-raised errors, e.g. our own frappe.throw calls) is the
