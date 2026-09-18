@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zenvora Education – Frontend
 
-## Getting Started
+Vue 3 + Vite + TypeScript + Vue Router + Pinia + Tailwind CSS 4. Talks to the Frappe backend
+(`zenvora_education` app) through its whitelisted `/api/method/...` endpoints only.
 
-First, run the development server:
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env   # optional
+npm run dev            # http://localhost:3000, proxies /api to Frappe (default http://localhost:8002)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Log in with a Frappe user. Sign-in sets a same-origin cookie because Vite proxies `/api`, so no CORS
+configuration is needed in development.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build          # type-checks, then writes dist/
+```
 
-## Learn More
+Serve `dist/` from the same origin as Frappe (reverse proxy `/api` to Frappe and fall back to
+`index.html` for other paths), or set `VITE_FRAPPE_URL` at build time if the backend is on another origin
+(then Frappe's `allow_cors` must list the frontend origin).
 
-To learn more about Next.js, take a look at the following resources:
+## Layout
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `src/lib/api.ts` – typed client for every backend method; `src/lib/types.ts` – response types
+- `src/stores/session.ts` – Pinia store: auth state and role
+- `src/router.ts` – routes and the login guard
+- `src/components/ResourcePage.vue` – config-driven list page (Add / Edit modal, checkboxes, bulk delete)
+- `src/components/DataTable.vue` – search, sort, pagination, selection
+- `src/pages/` – one file per screen; `src/pages/settings/` – the seven Settings sections
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The previous Next.js/React version is preserved at the git tag `react-final`.
