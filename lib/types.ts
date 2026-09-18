@@ -49,6 +49,9 @@ export interface StaffMember {
 	designation: string;
 	department: string;
 	is_teaching_role: boolean;
+	personal_email?: string | null;
+	date_of_joining?: string | null;
+	has_login?: boolean;
 }
 
 export interface EmployeeAttendanceRow {
@@ -73,6 +76,7 @@ export interface CourseRow {
 	name: string;
 	course_name: string;
 	department: string;
+	description?: string | null;
 }
 
 export interface StudentRow {
@@ -80,6 +84,9 @@ export interface StudentRow {
 	student_name: string;
 	student_email_id?: string;
 	enabled: number;
+	/** Section (Student Group) and class (Program) the student sits in, when placed. */
+	student_group?: string | null;
+	program?: string | null;
 }
 
 export interface ResultRow {
@@ -129,6 +136,7 @@ export interface StudentGroupRow {
 	academic_term?: string;
 	max_strength: number;
 	disabled: number;
+	student_count?: number;
 }
 
 export interface FeeCategoryRow {

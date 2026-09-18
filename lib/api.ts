@@ -18,9 +18,13 @@ function extractErrorMessage(status: number, body: string): { message: string; s
 		// setup that has nothing to do with this request) and must not take priority when a
 		// real error is also present.
 		if (parsed._server_messages) {
-			const messages = JSON.parse(parsed._server_messages) as string[];
-			const first = JSON.parse(messages[0]);
-			if (first.message) return { message: first.message, sessionExpired: false };
+			// Frappe queues informational toasts ("Document renamed...", alert: 1) in the same
+			// list as real errors. Skip those, and prefer the last remaining message - the one
+			// actually raised - over earlier generic ones.
+			const parsedMessages = (JSON.parse(parsed._server_messages) as string[]).map((m) => JSON.parse(m));
+			const errors = parsedMessages.filter((m) => m.message && !m.alert);
+			const chosen = errors.length ? errors[errors.length - 1] : parsedMessages[0];
+			if (chosen?.message) return { message: chosen.message, sessionExpired: false };
 		}
 		if (typeof parsed.message === "string") return { message: parsed.message, sessionExpired: false };
 		if (parsed.exception) {
@@ -185,6 +189,22 @@ export const api = {
 		term_start_date: string;
 		term_end_date: string;
 	}) => callMethod("zenvora_education.api.settings.create_academic_term", params, { method: "POST" }),
+
+	getRecord: (resource: string, name: string) =>
+		callMethod<Record<string, string | Array<Record<string, string>>>>("zenvora_education.api.crud.get_record", {
+			resource,
+			name,
+		}),
+
+	updateRecord: (resource: string, name: string, values: Record<string, unknown>) =>
+		callMethod<string>("zenvora_education.api.crud.update_record", { resource, name, values }, { method: "POST" }),
+
+	deleteRecords: (resource: string, names: string[]) =>
+		callMethod<{ name: string; ok: boolean; message: string }[]>(
+			"zenvora_education.api.crud.delete_records",
+			{ resource, names },
+			{ method: "POST" },
+		),
 
 	listCompanies: () => callMethod<CompanyRow[]>("zenvora_education.api.settings.list_companies"),
 
