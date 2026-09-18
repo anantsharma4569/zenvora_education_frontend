@@ -20,6 +20,7 @@ const emptyForm = {
 	date_of_joining: "",
 	company: "",
 	personal_email: "",
+	password: "",
 	is_instructor: false,
 };
 
@@ -57,7 +58,7 @@ export default function StaffPage() {
 		setSubmitting(true);
 		setFormError(null);
 		try {
-			await api.createEmployee(form);
+			await api.createEmployee({ ...form, password: form.password || undefined });
 			setForm(emptyForm);
 			setFormOpen(false);
 			load();
@@ -152,6 +153,14 @@ export default function StaffPage() {
 						className={inputClass}
 						value={form.personal_email}
 						onChange={(e) => setForm({ ...form, personal_email: e.target.value })}
+					/>
+					<input
+						type="password"
+						autoComplete="new-password"
+						placeholder="Login password (optional - needs Personal Email)"
+						className={inputClass}
+						value={form.password}
+						onChange={(e) => setForm({ ...form, password: e.target.value })}
 					/>
 					<label className="flex items-center gap-2 text-sm sm:col-span-2">
 						<input

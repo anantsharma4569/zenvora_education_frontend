@@ -69,14 +69,6 @@ export interface StudentAttendanceRow {
 	status: string;
 }
 
-export interface EmployeeRow {
-	name: string;
-	employee_name: string;
-	department: string;
-	designation: string;
-	status: string;
-}
-
 export interface CourseRow {
 	name: string;
 	course_name: string;

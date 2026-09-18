@@ -77,7 +77,6 @@ import type {
 	DashboardData,
 	DepartmentRow,
 	EmployeeAttendanceRow,
-	EmployeeRow,
 	FeeCategoryRow,
 	FeeRow,
 	FeeStructureRow,
@@ -115,9 +114,6 @@ export const api = {
 			{ method: "POST" },
 		),
 
-	listEmployees: (params?: { department?: string }) =>
-		callMethod<EmployeeRow[]>("zenvora_education.api.employee.list_employees", params),
-
 	createEmployee: (params: {
 		first_name: string;
 		gender: string;
@@ -129,6 +125,7 @@ export const api = {
 		last_name?: string;
 		personal_email?: string;
 		is_instructor?: boolean;
+		password?: string;
 	}) => callMethod("zenvora_education.api.employee.create_employee", params, { method: "POST" }),
 
 	getStaffDirectory: (company?: string) =>
@@ -164,6 +161,7 @@ export const api = {
 		date_of_birth?: string;
 		gender?: string;
 		academic_term?: string;
+		student_group?: string;
 	}) => callMethod("zenvora_education.api.student.create_student", params, { method: "POST" }),
 
 	listPrograms: () => callMethod<ProgramRow[]>("zenvora_education.api.settings.list_programs"),

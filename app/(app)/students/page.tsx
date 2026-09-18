@@ -17,6 +17,7 @@ const emptyForm = {
 	date_of_birth: "",
 	gender: "",
 	program: "",
+	student_group: "",
 	academic_year: "",
 };
 
@@ -70,6 +71,10 @@ export default function StudentsPage() {
 
 	const sectionsForClass = studentGroups
 		.filter((g) => g.program === classFilter)
+		.sort((a, b) => a.student_group_name.localeCompare(b.student_group_name));
+
+	const formSections = studentGroups
+		.filter((g) => g.program === form.program)
 		.sort((a, b) => a.student_group_name.localeCompare(b.student_group_name));
 
 	const handleSubmit = async (e: React.FormEvent) => {
@@ -212,7 +217,7 @@ export default function StudentsPage() {
 						required
 						className={inputClass}
 						value={form.program}
-						onChange={(e) => setForm({ ...form, program: e.target.value })}
+						onChange={(e) => setForm({ ...form, program: e.target.value, student_group: "" })}
 					>
 						<option value="">Select Program...</option>
 						{programs.map((p) => (
@@ -220,6 +225,20 @@ export default function StudentsPage() {
 								{p.program_name}
 							</option>
 						))}
+					</select>
+					<select
+						required={formSections.length > 0}
+						className={inputClass}
+						value={form.student_group}
+						disabled={!form.program}
+						onChange={(e) => setForm({ ...form, student_group: e.target.value })}
+					>
+						<option value="">{form.program ? "Select Section..." : "Select a class first"}</option>
+						{formSections.map((g) => (
+								<option key={g.name} value={g.name}>
+									{g.student_group_name}
+								</option>
+							))}
 					</select>
 					<select
 						required
