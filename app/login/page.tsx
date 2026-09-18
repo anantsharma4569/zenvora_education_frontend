@@ -32,12 +32,12 @@ export default function LoginPage() {
 	};
 
 	return (
-		<div className="flex min-h-screen items-center justify-center bg-black/[.02] dark:bg-white/[.02]">
+		<div className="flex min-h-screen items-center justify-center bg-mint">
 			<form
 				onSubmit={handleSubmit}
-				className="w-full max-w-sm rounded-lg border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-black"
+				className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-7 shadow-sm"
 			>
-				<h1 className="mb-1 text-xl font-semibold">Zenvora Education</h1>
+				<h1 className="mb-1 text-xl font-semibold"><span className="text-accent">Zenvora</span> Education</h1>
 				<p className="mb-6 text-sm text-black/60 dark:text-white/60">Sign in to continue</p>
 
 				<div className="flex flex-col gap-3">
@@ -63,7 +63,7 @@ export default function LoginPage() {
 					<button
 						type="submit"
 						disabled={submitting}
-						className="mt-2 rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
+						className="mt-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-50"
 					>
 						{submitting ? "Signing in..." : "Sign in"}
 					</button>

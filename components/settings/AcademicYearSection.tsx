@@ -3,92 +3,64 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { AcademicYearRow } from "@/lib/types";
-import { DataTable } from "@/components/DataTable";
-import { SectionPage } from "@/components/SectionPage";
-import { SubmitButton, inputClass } from "@/components/FormControls";
+import { ResourcePage, type FieldDef, type Values } from "@/components/ResourcePage";
 
-const emptyForm = { academic_year_name: "", year_start_date: "", year_end_date: "" };
+const empty = (): Values => ({ academic_year_name: "", year_start_date: "", year_end_date: "" });
+
+const endAfterStart = (v: Values) =>
+	v.year_start_date && v.year_end_date && (v.year_end_date as string) <= (v.year_start_date as string)
+		? "End date must be after the start date"
+		: null;
+
+const fields: FieldDef[] = [
+	{ key: "academic_year_name", label: "Academic Year Name", type: "text", required: true, placeholder: "e.g. 2026-27", full: true },
+	{ key: "year_start_date", label: "Start Date", type: "date", required: true },
+	{ key: "year_end_date", label: "End Date", type: "date", required: true, validate: endAfterStart },
+];
 
 export function AcademicYearSection() {
 	const [rows, setRows] = useState<AcademicYearRow[]>([]);
-	const [form, setForm] = useState(emptyForm);
-	const [submitting, setSubmitting] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [formOpen, setFormOpen] = useState(false);
-
 	const load = () => api.listAcademicYears().then(setRows).catch(() => undefined);
-
 	useEffect(() => {
 		load();
 	}, []);
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setSubmitting(true);
-		setError(null);
-		try {
-			await api.createAcademicYear(form);
-			setForm(emptyForm);
-			setFormOpen(false);
-			load();
-		} catch (err) {
-			setError((err as Error).message);
-		} finally {
-			setSubmitting(false);
-		}
-	};
-
 	return (
-		<SectionPage
+		<ResourcePage<AcademicYearRow>
 			title="Academic Years"
-			count={rows.length}
-			addLabel="+ Add Academic Year"
-			formOpen={formOpen}
-			onToggleForm={() => setFormOpen((v) => !v)}
-			formError={error}
-			form={
-				<form onSubmit={handleSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-					<input
-						required
-						autoFocus
-						placeholder="e.g. 2026-27"
-						className={inputClass}
-						value={form.academic_year_name}
-						onChange={(e) => setForm({ ...form, academic_year_name: e.target.value })}
-					/>
-					<input
-						required
-						type="date"
-						className={inputClass}
-						value={form.year_start_date}
-						onChange={(e) => setForm({ ...form, year_start_date: e.target.value })}
-					/>
-					<input
-						required
-						type="date"
-						className={inputClass}
-						value={form.year_end_date}
-						onChange={(e) => setForm({ ...form, year_end_date: e.target.value })}
-					/>
-					<div className="sm:col-span-3">
-						<SubmitButton submitting={submitting} label="Save" />
-					</div>
-				</form>
+			singular="Academic Year"
+			description="A school session, e.g. 2026-27 (April to March)"
+			rows={rows}
+			rowKey={(r) => r.name}
+			rowLabel={(r) => r.name}
+			searchPlaceholder="Search academic years..."
+			searchValue={(r) => r.name}
+			emptyLabel="No academic years yet."
+			columns={[
+				{ key: "name", label: "Academic Year", sortable: true, value: (r) => r.name },
+				{ key: "year_start_date", label: "Starts", sortable: true, value: (r) => r.year_start_date || "" },
+				{ key: "year_end_date", label: "Ends", sortable: true, value: (r) => r.year_end_date || "" },
+			]}
+			fields={fields}
+			emptyValues={empty}
+			reload={load}
+			onCreate={(v) =>
+				api.createAcademicYear({
+					academic_year_name: v.academic_year_name as string,
+					year_start_date: v.year_start_date as string,
+					year_end_date: v.year_end_date as string,
+				})
 			}
-			table={
-				<DataTable
-					rows={rows}
-					rowKey={(r) => r.name}
-					searchPlaceholder="Search academic years..."
-					searchValue={(r) => r.name}
-					emptyLabel="No academic years yet."
-					columns={[
-						{ key: "name", label: "Academic Year", sortable: true, value: (r) => r.name },
-						{ key: "year_start_date", label: "Start Date", value: (r) => r.year_start_date || "-" },
-						{ key: "year_end_date", label: "End Date", value: (r) => r.year_end_date || "-" },
-					]}
-				/>
-			}
+			loadForEdit={async (r) => {
+				const rec = await api.getRecord("academic_year", r.name);
+				return {
+					academic_year_name: rec.academic_year_name as string,
+					year_start_date: rec.year_start_date as string,
+					year_end_date: rec.year_end_date as string,
+				};
+			}}
+			onUpdate={(r, v) => api.updateRecord("academic_year", r.name, v)}
+			onDelete={(list) => api.deleteRecords("academic_year", list.map((r) => r.name))}
 		/>
 	);
 }

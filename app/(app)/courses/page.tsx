@@ -6,98 +6,105 @@ import { useRole } from "@/context/RoleContext";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/DataState";
 import { DataTable } from "@/components/DataTable";
-import { SectionPage } from "@/components/SectionPage";
-import { SubmitButton, inputClass } from "@/components/FormControls";
-import type { CourseRow } from "@/lib/types";
+import { ResourcePage, type FieldDef, type Values } from "@/components/ResourcePage";
+import type { CourseRow, DepartmentRow } from "@/lib/types";
+
+const empty = (): Values => ({ course_name: "", department: "", description: "" });
 
 export default function CoursesPage() {
 	const { role } = useRole();
 	const [courses, setCourses] = useState<CourseRow[]>([]);
+	const [departments, setDepartments] = useState<DepartmentRow[]>([]);
 	const [error, setError] = useState<string | null>(null);
-	const [formOpen, setFormOpen] = useState(false);
-	const [name, setName] = useState("");
-	const [department, setDepartment] = useState("");
-	const [submitting, setSubmitting] = useState(false);
-	const [formError, setFormError] = useState<string | null>(null);
 
 	const load = () => {
 		setError(null);
-		api.listCourses().then(setCourses).catch((err) => setError(err.message));
+		return api.listCourses().then(setCourses).catch((err) => setError(err.message));
 	};
 
-	useEffect(load, []);
+	useEffect(() => {
+		load();
+	}, []);
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setSubmitting(true);
-		setFormError(null);
-		try {
-			await api.createCourse({ course_name: name, department });
-			setName("");
-			setDepartment("");
-			setFormOpen(false);
-			load();
-		} catch (err) {
-			setFormError((err as Error).message);
-		} finally {
-			setSubmitting(false);
-		}
-	};
+	useEffect(() => {
+		if (role !== "admin") return;
+		api.listDepartments().then(setDepartments).catch(() => undefined);
+	}, [role]);
 
-	if (error) return <ErrorState message={error} />;
+	const columns = [
+		{ key: "course_name", label: "Course", sortable: true, value: (c: CourseRow) => c.course_name },
+		{ key: "department", label: "Department", sortable: true, value: (c: CourseRow) => c.department || "-" },
+		{ key: "description", label: "Description", value: (c: CourseRow) => c.description || "-" },
+	];
 
-	const table = (
-		<DataTable
-			rows={courses}
-			rowKey={(c) => c.name}
-			searchPlaceholder="Search courses..."
-			searchValue={(c) => c.course_name}
-			emptyLabel="No courses yet."
-			columns={[
-				{ key: "course_name", label: "Course", sortable: true, value: (c) => c.course_name },
-				{ key: "department", label: "Department", sortable: true, value: (c) => c.department || "-" },
-			]}
-		/>
-	);
+	if (error) {
+		return (
+			<div>
+				<PageHeader title="Courses" subtitle="Subjects offered across programs" />
+				<ErrorState message={error} />
+			</div>
+		);
+	}
 
 	if (role !== "admin") {
 		return (
 			<div>
 				<PageHeader title="Courses" subtitle="Subjects offered across programs" />
-				{table}
+				<DataTable
+					rows={courses}
+					rowKey={(c) => c.name}
+					searchPlaceholder="Search courses..."
+					searchValue={(c) => c.course_name}
+					emptyLabel="No courses yet."
+					columns={columns}
+				/>
 			</div>
 		);
 	}
 
+	const fields: FieldDef[] = [
+		{ key: "course_name", label: "Course Name", type: "text", required: true, placeholder: "e.g. Mathematics", full: true },
+		{
+			key: "department",
+			label: "Department",
+			type: "select",
+			options: departments.map((d) => ({ value: d.name, label: d.department_name })),
+		},
+		{ key: "description", label: "Description", type: "textarea", placeholder: "What this course covers" },
+	];
+
 	return (
-		<SectionPage
+		<ResourcePage<CourseRow>
 			title="Courses"
-			count={courses.length}
+			singular="Course"
 			description="Subjects offered across programs"
-			addLabel="+ Add Course"
-			formOpen={formOpen}
-			onToggleForm={() => setFormOpen((v) => !v)}
-			formError={formError}
-			form={
-				<form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
-					<input
-						required
-						autoFocus
-						placeholder="Course Name"
-						className={`flex-1 ${inputClass}`}
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-					/>
-					<input
-						placeholder="Department"
-						className={`flex-1 ${inputClass}`}
-						value={department}
-						onChange={(e) => setDepartment(e.target.value)}
-					/>
-					<SubmitButton submitting={submitting} label="Add" />
-				</form>
+			rows={courses}
+			rowKey={(c) => c.name}
+			rowLabel={(c) => c.course_name}
+			searchPlaceholder="Search courses..."
+			searchValue={(c) => c.course_name}
+			emptyLabel="No courses yet."
+			columns={columns}
+			fields={fields}
+			emptyValues={empty}
+			reload={load}
+			onCreate={(v) =>
+				api.createCourse({
+					course_name: v.course_name as string,
+					department: (v.department as string) || undefined,
+					description: (v.description as string) || undefined,
+				})
 			}
-			table={table}
+			loadForEdit={async (c) => {
+				const rec = await api.getRecord("course", c.name);
+				return {
+					course_name: rec.course_name as string,
+					department: rec.department as string,
+					description: rec.description as string,
+				};
+			}}
+			onUpdate={(c, v) => api.updateRecord("course", c.name, v)}
+			onDelete={(list) => api.deleteRecords("course", list.map((c) => c.name))}
 		/>
 	);
 }

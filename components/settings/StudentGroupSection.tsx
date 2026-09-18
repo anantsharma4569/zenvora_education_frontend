@@ -2,130 +2,115 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { AcademicYearRow, ProgramRow, StudentGroupRow } from "@/lib/types";
-import { DataTable } from "@/components/DataTable";
-import { SectionPage } from "@/components/SectionPage";
-import { SubmitButton, inputClass } from "@/components/FormControls";
+import type { AcademicTermRow, AcademicYearRow, ProgramRow, StudentGroupRow } from "@/lib/types";
+import { ResourcePage, type FieldDef, type Values } from "@/components/ResourcePage";
 
-const emptyForm = { student_group_name: "", program: "", academic_year: "", max_strength: "" };
+const empty = (): Values => ({
+	student_group_name: "",
+	program: "",
+	academic_year: "",
+	academic_term: "",
+	max_strength: "",
+	disabled: false,
+});
 
 export function StudentGroupSection() {
 	const [rows, setRows] = useState<StudentGroupRow[]>([]);
 	const [programs, setPrograms] = useState<ProgramRow[]>([]);
-	const [academicYears, setAcademicYears] = useState<AcademicYearRow[]>([]);
-	const [form, setForm] = useState(emptyForm);
-	const [submitting, setSubmitting] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [formOpen, setFormOpen] = useState(false);
+	const [years, setYears] = useState<AcademicYearRow[]>([]);
+	const [terms, setTerms] = useState<AcademicTermRow[]>([]);
 
 	const load = () => api.listStudentGroups().then(setRows).catch(() => undefined);
-
 	useEffect(() => {
 		load();
-	}, []);
-	useEffect(() => {
 		api.listPrograms().then(setPrograms).catch(() => undefined);
-		api.listAcademicYears().then(setAcademicYears).catch(() => undefined);
+		api.listAcademicYears().then(setYears).catch(() => undefined);
+		api.listAcademicTerms().then(setTerms).catch(() => undefined);
 	}, []);
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setSubmitting(true);
-		setError(null);
-		try {
-			await api.createStudentGroup({
-				student_group_name: form.student_group_name,
-				program: form.program,
-				academic_year: form.academic_year,
-				max_strength: form.max_strength ? Number(form.max_strength) : undefined,
-			});
-			setForm(emptyForm);
-			setFormOpen(false);
-			load();
-		} catch (err) {
-			setError((err as Error).message);
-		} finally {
-			setSubmitting(false);
-		}
-	};
+	const fields: FieldDef[] = [
+		{ key: "student_group_name", label: "Section Name", type: "text", required: true, placeholder: "e.g. Grade 10 - A", full: true },
+		{
+			key: "program",
+			label: "Class (Program)",
+			type: "select",
+			required: true,
+			lockedOnEdit: true,
+			options: programs.map((p) => ({ value: p.name, label: p.program_name })),
+		},
+		{
+			key: "academic_year",
+			label: "Academic Year",
+			type: "select",
+			required: true,
+			lockedOnEdit: true,
+			options: years.map((y) => ({ value: y.name, label: y.name })),
+		},
+		{
+			key: "academic_term",
+			label: "Academic Term",
+			type: "select",
+			options: (v) =>
+				terms.filter((t) => t.academic_year === v.academic_year).map((t) => ({ value: t.name, label: t.term_name })),
+			help: "Pick an Academic Year first.",
+		},
+		{ key: "max_strength", label: "Maximum Students", type: "number", placeholder: "0 = no limit" },
+		{ key: "disabled", label: "Disabled", type: "checkbox", placeholder: "This section is disabled", hidden: (_v, editing) => !editing },
+	];
 
 	return (
-		<SectionPage
+		<ResourcePage<StudentGroupRow>
 			title="Student Groups"
-			count={rows.length}
-			description="Classes / Sections - e.g. Class 10 - A"
-			addLabel="+ Add Student Group"
-			formOpen={formOpen}
-			onToggleForm={() => setFormOpen((v) => !v)}
-			formError={error}
-			form={
-				<form onSubmit={handleSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-					<input
-						required
-						autoFocus
-						placeholder="Group Name (e.g. Class 10 - A)"
-						className={inputClass}
-						value={form.student_group_name}
-						onChange={(e) => setForm({ ...form, student_group_name: e.target.value })}
-					/>
-					<input
-						type="number"
-						placeholder="Max Strength (optional)"
-						className={inputClass}
-						value={form.max_strength}
-						onChange={(e) => setForm({ ...form, max_strength: e.target.value })}
-					/>
-					<select
-						required
-						className={inputClass}
-						value={form.program}
-						onChange={(e) => setForm({ ...form, program: e.target.value })}
-					>
-						<option value="">Select Program...</option>
-						{programs.map((p) => (
-							<option key={p.name} value={p.name}>
-								{p.program_name}
-							</option>
-						))}
-					</select>
-					<select
-						required
-						className={inputClass}
-						value={form.academic_year}
-						onChange={(e) => setForm({ ...form, academic_year: e.target.value })}
-					>
-						<option value="">Select Academic Year...</option>
-						{academicYears.map((y) => (
-							<option key={y.name} value={y.name}>
-								{y.name}
-							</option>
-						))}
-					</select>
-					{(programs.length === 0 || academicYears.length === 0) && (
-						<p className="text-xs text-black/50 sm:col-span-2 dark:text-white/50">
-							Add a Program and an Academic Year first.
-						</p>
-					)}
-					<div className="sm:col-span-2">
-						<SubmitButton submitting={submitting} label="Save" />
-					</div>
-				</form>
+			singular="Section"
+			description="Class sections, e.g. Grade 10 - A. Students are placed into a section."
+			rows={rows}
+			rowKey={(r) => r.name}
+			rowLabel={(r) => r.student_group_name}
+			searchPlaceholder="Search sections..."
+			searchValue={(r) => r.student_group_name}
+			emptyLabel="No sections yet."
+			columns={[
+				{ key: "student_group_name", label: "Section", sortable: true, value: (r) => r.student_group_name },
+				{ key: "program", label: "Class", sortable: true, value: (r) => r.program },
+				{ key: "academic_year", label: "Academic Year", value: (r) => r.academic_year },
+				{ key: "academic_term", label: "Term", value: (r) => r.academic_term || "-" },
+				{ key: "student_count", label: "Students", sortable: true, align: "right", value: (r) => r.student_count ?? 0 },
+				{ key: "max_strength", label: "Max", align: "right", value: (r) => r.max_strength || "-" },
+				{ key: "disabled", label: "Status", value: (r) => (r.disabled ? "Disabled" : "Active") },
+			]}
+			fields={fields}
+			emptyValues={empty}
+			onChangeField={(key, next) => (key === "academic_year" ? { ...next, academic_term: "" } : next)}
+			reload={load}
+			onCreate={(v) =>
+				api.createStudentGroup({
+					student_group_name: v.student_group_name as string,
+					program: v.program as string,
+					academic_year: v.academic_year as string,
+					academic_term: (v.academic_term as string) || undefined,
+					max_strength: v.max_strength ? Number(v.max_strength) : undefined,
+				})
 			}
-			table={
-				<DataTable
-					rows={rows}
-					rowKey={(r) => r.name}
-					searchPlaceholder="Search student groups..."
-					searchValue={(r) => r.student_group_name}
-					emptyLabel="No student groups yet."
-					columns={[
-						{ key: "student_group_name", label: "Group", sortable: true, value: (r) => r.student_group_name },
-						{ key: "program", label: "Program", value: (r) => r.program },
-						{ key: "academic_year", label: "Academic Year", value: (r) => r.academic_year },
-						{ key: "max_strength", label: "Max Strength", value: (r) => r.max_strength || "-" },
-					]}
-				/>
+			loadForEdit={async (r) => {
+				const rec = await api.getRecord("student_group", r.name);
+				return {
+					student_group_name: rec.student_group_name as string,
+					program: r.program,
+					academic_year: r.academic_year,
+					academic_term: rec.academic_term as string,
+					max_strength: rec.max_strength === "0" ? "" : (rec.max_strength as string),
+					disabled: rec.disabled === "1",
+				};
+			}}
+			onUpdate={(r, v) =>
+				api.updateRecord("student_group", r.name, {
+					student_group_name: v.student_group_name,
+					academic_term: v.academic_term,
+					max_strength: v.max_strength || 0,
+					disabled: v.disabled ? 1 : 0,
+				})
 			}
+			onDelete={(list) => api.deleteRecords("student_group", list.map((r) => r.name))}
 		/>
 	);
 }

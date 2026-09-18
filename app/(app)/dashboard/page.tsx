@@ -137,11 +137,11 @@ export default function DashboardPage() {
 				<div className="flex flex-wrap items-center gap-2">
 					<Link
 						href="/attendance"
-						className="rounded-lg border border-line bg-surface px-3.5 py-2.5 text-[13px] font-medium hover:bg-black/[0.03]"
+						className="rounded-full border border-black/15 bg-surface px-4 py-2.5 text-[13px] font-medium hover:bg-mint"
 					>
 						Take attendance
 					</Link>
-					<button className="rounded-lg bg-black px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-black/90">
+					<button className="rounded-full bg-accent px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-accent-strong">
 						Publish notice
 					</button>
 				</div>

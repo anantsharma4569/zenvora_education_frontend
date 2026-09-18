@@ -33,7 +33,7 @@ export function SettingsNav() {
 										href={href}
 										className={`rounded-md px-2 py-1.5 text-sm ${
 											active
-												? "bg-black text-white dark:bg-white dark:text-black"
+												? "bg-accent text-white"
 												: "text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
 										}`}
 									>

@@ -48,8 +48,8 @@ export function Sidebar() {
 			<Link
 				key={item.href}
 				href={item.href}
-				className={`whitespace-nowrap rounded-[7px] px-2.5 py-2 text-[13.5px] transition-colors ${
-					active ? "bg-black font-medium text-white" : "text-black/70 hover:bg-black/5"
+				className={`whitespace-nowrap rounded-full px-3.5 py-2 text-[13.5px] transition-colors ${
+					active ? "bg-accent font-semibold text-white" : "text-black/70 hover:bg-mint hover:text-accent"
 				}`}
 			>
 				{item.label}
@@ -59,7 +59,7 @@ export function Sidebar() {
 
 	const brand = (
 		<div className="flex items-center gap-2.5 px-2">
-			<span className="h-[22px] w-[22px] shrink-0 rounded-md bg-accent" />
+			<span className="h-[26px] w-[26px] shrink-0 rounded-full bg-accent" />
 			<span>
 				<span className="block whitespace-nowrap text-sm font-semibold tracking-[-0.01em]">
 					Zenvora Education
@@ -102,7 +102,7 @@ export function Sidebar() {
 					</select>
 					<button
 						onClick={handleLogout}
-						className="mx-1 mt-2.5 w-[calc(100%-8px)] rounded-[7px] border border-black/[0.12] px-2.5 py-2 text-[13px] text-black/70 hover:bg-black/[0.04]"
+						className="mx-1 mt-2.5 w-[calc(100%-8px)] rounded-full border border-black/[0.15] px-2.5 py-2 text-[13px] font-medium text-black/70 hover:bg-mint"
 					>
 						Log out
 					</button>

@@ -2,75 +2,58 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { DepartmentRow } from "@/lib/types";
-import { DataTable } from "@/components/DataTable";
-import { SectionPage } from "@/components/SectionPage";
-import { SubmitButton, inputClass } from "@/components/FormControls";
+import type { CompanyRow, DepartmentRow } from "@/lib/types";
+import { ResourcePage, type FieldDef, type Values } from "@/components/ResourcePage";
+
+const empty = (): Values => ({ department_name: "", company: "" });
 
 export function DepartmentSection() {
 	const [rows, setRows] = useState<DepartmentRow[]>([]);
-	const [name, setName] = useState("");
-	const [submitting, setSubmitting] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [formOpen, setFormOpen] = useState(false);
+	const [companies, setCompanies] = useState<CompanyRow[]>([]);
 
 	const load = () => api.listDepartments().then(setRows).catch(() => undefined);
-
 	useEffect(() => {
 		load();
+		api.listCompanies().then(setCompanies).catch(() => undefined);
 	}, []);
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setSubmitting(true);
-		setError(null);
-		try {
-			await api.createDepartment({ department_name: name });
-			setName("");
-			setFormOpen(false);
-			load();
-		} catch (err) {
-			setError((err as Error).message);
-		} finally {
-			setSubmitting(false);
-		}
-	};
+	const fields: FieldDef[] = [
+		{ key: "department_name", label: "Department Name", type: "text", required: true, placeholder: "e.g. Science" },
+		{
+			key: "company",
+			label: "Company",
+			type: "select",
+			required: true,
+			lockedOnEdit: true,
+			options: companies.map((c) => ({ value: c.name, label: c.name })),
+		},
+	];
 
 	return (
-		<SectionPage
+		<ResourcePage<DepartmentRow>
 			title="Departments"
-			count={rows.length}
-			description="Academic and administrative departments"
-			addLabel="+ Add Department"
-			formOpen={formOpen}
-			onToggleForm={() => setFormOpen((v) => !v)}
-			formError={error}
-			form={
-				<form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
-					<input
-						required
-						autoFocus
-						placeholder="Department Name"
-						className={`flex-1 ${inputClass}`}
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-					/>
-					<SubmitButton submitting={submitting} label="Save" />
-				</form>
+			singular="Department"
+			description="Groups staff and programs, e.g. Academics, Administration"
+			rows={rows}
+			rowKey={(r) => r.name}
+			rowLabel={(r) => r.department_name}
+			searchPlaceholder="Search departments..."
+			searchValue={(r) => r.department_name}
+			emptyLabel="No departments yet."
+			columns={[
+				{ key: "department_name", label: "Department", sortable: true, value: (r) => r.department_name },
+				{ key: "company", label: "Company", sortable: true, value: (r) => r.company },
+			]}
+			fields={fields}
+			emptyValues={empty}
+			openValues={(): Values => (companies.length === 1 ? { company: companies[0].name } : {})}
+			reload={load}
+			onCreate={(v) =>
+				api.createDepartment({ department_name: v.department_name as string, company: (v.company as string) || undefined })
 			}
-			table={
-				<DataTable
-					rows={rows}
-					rowKey={(r) => r.name}
-					searchPlaceholder="Search departments..."
-					searchValue={(r) => r.department_name}
-					emptyLabel="No departments yet."
-					columns={[
-						{ key: "department_name", label: "Name", sortable: true, value: (r) => r.department_name },
-						{ key: "company", label: "Company", value: (r) => r.company },
-					]}
-				/>
-			}
+			loadForEdit={async (r) => ({ department_name: r.department_name, company: r.company })}
+			onUpdate={(r, v) => api.updateRecord("department", r.name, { department_name: v.department_name })}
+			onDelete={(list) => api.deleteRecords("department", list.map((r) => r.name))}
 		/>
 	);
 }

@@ -3,62 +3,37 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ErrorState } from "@/components/DataState";
-import { DataTable } from "@/components/DataTable";
-import { SectionPage } from "@/components/SectionPage";
-import { SubmitButton, inputClass } from "@/components/FormControls";
+import { ResourcePage, type FieldDef, type Values } from "@/components/ResourcePage";
 import type { CompanyRow, DepartmentRow, DesignationRow, StaffMember } from "@/lib/types";
 
-const GENDER_OPTIONS = ["Male", "Female", "Other"];
+const GENDERS = ["Male", "Female", "Other"].map((g) => ({ value: g, label: g }));
 
-const emptyForm = {
+const empty = (): Values => ({
 	first_name: "",
 	last_name: "",
 	gender: "",
 	date_of_birth: "",
 	department: "",
 	designation: "",
-	date_of_joining: "",
 	company: "",
+	date_of_joining: "",
 	personal_email: "",
 	password: "",
 	is_instructor: false,
-};
-
-const COLUMNS = [
-	{ key: "employee_name", label: "Name", sortable: true, value: (s: StaffMember) => s.employee_name },
-	{ key: "department", label: "Department", sortable: true, value: (s: StaffMember) => s.department },
-	{ key: "designation", label: "Designation", value: (s: StaffMember) => s.designation },
-];
+});
 
 export default function StaffPage() {
 	const [teachingStaff, setTeachingStaff] = useState<StaffMember[]>([]);
 	const [nonTeachingStaff, setNonTeachingStaff] = useState<StaffMember[]>([]);
 	const [tab, setTab] = useState<"teaching" | "non-teaching">("teaching");
 	const [error, setError] = useState<string | null>(null);
-	const [formOpen, setFormOpen] = useState(false);
-	const [form, setForm] = useState(emptyForm);
-	const [submitting, setSubmitting] = useState(false);
-	const [formError, setFormError] = useState<string | null>(null);
 	const [departments, setDepartments] = useState<DepartmentRow[]>([]);
 	const [companies, setCompanies] = useState<CompanyRow[]>([]);
 	const [designations, setDesignations] = useState<DesignationRow[]>([]);
 
-	useEffect(() => {
-		api.listDepartments().then(setDepartments).catch(() => undefined);
-		api.listDesignations().then(setDesignations).catch(() => undefined);
-		api
-			.listCompanies()
-			.then((rows) => {
-				setCompanies(rows);
-				// A school normally has exactly one Company - don't make the admin pick it.
-				if (rows.length === 1) setForm((f) => ({ ...f, company: f.company || rows[0].name }));
-			})
-			.catch(() => undefined);
-	}, []);
-
 	const load = () => {
 		setError(null);
-		api
+		return api
 			.getStaffDirectory()
 			.then(({ teachingStaff, nonTeachingStaff }) => {
 				setTeachingStaff(teachingStaff);
@@ -67,202 +42,170 @@ export default function StaffPage() {
 			.catch((err) => setError(err.message));
 	};
 
-	useEffect(load, []);
-
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setSubmitting(true);
-		setFormError(null);
-		try {
-			await api.createEmployee({ ...form, password: form.password || undefined });
-			setForm({ ...emptyForm, company: companies.length === 1 ? companies[0].name : "" });
-			setFormOpen(false);
-			load();
-		} catch (err) {
-			setFormError((err as Error).message);
-		} finally {
-			setSubmitting(false);
-		}
-	};
+	useEffect(() => {
+		load();
+		api.listDepartments().then(setDepartments).catch(() => undefined);
+		api.listDesignations().then(setDesignations).catch(() => undefined);
+		api.listCompanies().then(setCompanies).catch(() => undefined);
+	}, []);
 
 	if (error) return <ErrorState message={error} />;
+
+	const fields: FieldDef[] = [
+		{ key: "first_name", label: "First Name", type: "text", required: true },
+		{ key: "last_name", label: "Last Name", type: "text" },
+		{ key: "gender", label: "Gender", type: "select", required: true, options: GENDERS },
+		{ key: "date_of_birth", label: "Date of Birth", type: "date", required: true },
+		{
+			key: "department",
+			label: "Department",
+			type: "select",
+			required: true,
+			options: departments.map((d) => ({ value: d.name, label: d.department_name })),
+		},
+		{
+			key: "designation",
+			label: "Designation",
+			type: "select",
+			required: true,
+			options: designations.map((d) => ({
+				value: d.name,
+				label: d.name,
+				group: d.is_teaching_role ? "Teaching" : "Non-teaching",
+			})),
+		},
+		{
+			key: "company",
+			label: "Company",
+			type: "select",
+			required: true,
+			createOnly: true,
+			options: companies.map((c) => ({ value: c.name, label: c.name })),
+		},
+		{ key: "date_of_joining", label: "Date of Joining", type: "date", required: true },
+		{
+			key: "personal_email",
+			label: "Personal Email",
+			type: "email",
+			requiredWhen: (v) => !!v.password,
+			help: "Used as the login name when a password is set.",
+		},
+		{
+			key: "password",
+			label: "Login Password",
+			type: "password",
+			createOnly: true,
+			help: "Optional - creates a login so they can sign in.",
+		},
+		{
+			key: "is_instructor",
+			label: "Teacher",
+			type: "checkbox",
+			createOnly: true,
+			placeholder: "This person is a teacher (also create an Instructor record)",
+			full: true,
+		},
+	];
 
 	const rows = tab === "teaching" ? teachingStaff : nonTeachingStaff;
 
 	return (
-		<SectionPage
+		<ResourcePage<StaffMember>
 			title="Staff"
-			count={teachingStaff.length + nonTeachingStaff.length}
+			singular="Staff Member"
 			description="Teaching and non-teaching staff records"
-			addLabel="+ Add Staff"
-			formOpen={formOpen}
-			onToggleForm={() => setFormOpen((v) => !v)}
-			formError={formError}
-			form={
-				<form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-					<input
-						required
-						autoFocus
-						placeholder="First Name"
-						className={inputClass}
-						value={form.first_name}
-						onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-					/>
-					<input
-						placeholder="Last Name"
-						className={inputClass}
-						value={form.last_name}
-						onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-					/>
-					<select
-						required
-						className={inputClass}
-						value={form.gender}
-						onChange={(e) => setForm({ ...form, gender: e.target.value })}
-					>
-						<option value="">Select Gender...</option>
-						{GENDER_OPTIONS.map((g) => (
-							<option key={g} value={g}>
-								{g}
-							</option>
-						))}
-					</select>
-					<input
-						required
-						type="date"
-						placeholder="Date of Birth"
-						className={inputClass}
-						value={form.date_of_birth}
-						onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
-					/>
-					<select
-						required
-						className={inputClass}
-						value={form.department}
-						onChange={(e) => setForm({ ...form, department: e.target.value })}
-					>
-						<option value="">Select Department...</option>
-						{departments.map((d) => (
-							<option key={d.name} value={d.name}>
-								{d.department_name}
-							</option>
-						))}
-					</select>
-					<select
-						required
-						className={inputClass}
-						value={form.designation}
-						onChange={(e) => {
-							const picked = designations.find((d) => d.name === e.target.value);
-							// A teaching designation implies a teacher - still editable below.
-							setForm({
-								...form,
-								designation: e.target.value,
-								is_instructor: picked ? picked.is_teaching_role : form.is_instructor,
-							});
-						}}
-					>
-						<option value="">Select Designation...</option>
-						<optgroup label="Teaching">
-							{designations
-								.filter((d) => d.is_teaching_role)
-								.map((d) => (
-									<option key={d.name} value={d.name}>
-										{d.name}
-									</option>
-								))}
-						</optgroup>
-						<optgroup label="Non-teaching">
-							{designations
-								.filter((d) => !d.is_teaching_role)
-								.map((d) => (
-									<option key={d.name} value={d.name}>
-										{d.name}
-									</option>
-								))}
-						</optgroup>
-					</select>
-					<select
-						required
-						className={inputClass}
-						value={form.company}
-						onChange={(e) => setForm({ ...form, company: e.target.value })}
-					>
-						<option value="">Select Company...</option>
-						{companies.map((c) => (
-							<option key={c.name} value={c.name}>
-								{c.name}
-							</option>
-						))}
-					</select>
-					<input
-						required
-						type="date"
-						className={inputClass}
-						value={form.date_of_joining}
-						onChange={(e) => setForm({ ...form, date_of_joining: e.target.value })}
-					/>
-					<input
-						type="email"
-						placeholder="Personal Email"
-						className={inputClass}
-						value={form.personal_email}
-						onChange={(e) => setForm({ ...form, personal_email: e.target.value })}
-					/>
-					<input
-						type="password"
-						autoComplete="new-password"
-						placeholder="Login password (optional - needs Personal Email)"
-						className={inputClass}
-						value={form.password}
-						onChange={(e) => setForm({ ...form, password: e.target.value })}
-					/>
-					<label className="flex items-center gap-2 text-sm sm:col-span-2">
-						<input
-							type="checkbox"
-							checked={form.is_instructor}
-							onChange={(e) => setForm({ ...form, is_instructor: e.target.checked })}
-						/>
-						This employee is a teacher (also create an Instructor record)
-					</label>
-
-					<div className="sm:col-span-2">
-						<SubmitButton submitting={submitting} label="Create Staff Member" />
-					</div>
-				</form>
-			}
-			table={
-				<div>
-					<div className="mb-4 flex gap-2 border-b border-black/10 dark:border-white/10">
-						{(
-							[
-								["teaching", `Teaching Staff (${teachingStaff.length})`],
-								["non-teaching", `Non-Teaching Staff (${nonTeachingStaff.length})`],
-							] as const
-						).map(([key, label]) => (
-							<button
-								key={key}
-								onClick={() => setTab(key)}
-								className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-									tab === key
-										? "border-black text-black dark:border-white dark:text-white"
-										: "border-transparent text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white"
-								}`}
-							>
-								{label}
-							</button>
-						))}
-					</div>
-					<DataTable
-						rows={rows}
-						rowKey={(s) => s.employee}
-						searchPlaceholder={`Search ${tab === "teaching" ? "teaching" : "non-teaching"} staff...`}
-						searchValue={(s) => s.employee_name}
-						emptyLabel={tab === "teaching" ? "No teaching staff yet." : "No non-teaching staff yet."}
-						columns={COLUMNS}
-					/>
+			rows={rows}
+			rowKey={(s) => s.employee}
+			rowLabel={(s) => `${s.employee_name} (${s.designation})`}
+			searchPlaceholder={`Search ${tab === "teaching" ? "teaching" : "non-teaching"} staff...`}
+			searchValue={(s) => s.employee_name}
+			emptyLabel={tab === "teaching" ? "No teaching staff yet." : "No non-teaching staff yet."}
+			beforeTable={
+				<div className="mb-4 flex gap-2 border-b border-line">
+					{(
+						[
+							["teaching", `Teaching Staff (${teachingStaff.length})`],
+							["non-teaching", `Non-Teaching Staff (${nonTeachingStaff.length})`],
+						] as const
+					).map(([key, label]) => (
+						<button
+							key={key}
+							onClick={() => setTab(key)}
+							className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+								tab === key ? "border-accent text-accent" : "border-transparent text-black/50 hover:text-black"
+							}`}
+						>
+							{label}
+						</button>
+					))}
 				</div>
 			}
+			columns={[
+				{ key: "employee_name", label: "Name", sortable: true, value: (s) => s.employee_name },
+				{ key: "department", label: "Department", sortable: true, value: (s) => s.department },
+				{ key: "designation", label: "Designation", sortable: true, value: (s) => s.designation },
+				{ key: "personal_email", label: "Email", value: (s) => s.personal_email || "-" },
+				{ key: "date_of_joining", label: "Joined", sortable: true, value: (s) => s.date_of_joining || "-" },
+				{
+					key: "has_login",
+					label: "Login",
+					value: (s) => (s.has_login ? "Yes" : "No"),
+					render: (s) => (
+						<span
+							className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${s.has_login ? "bg-mint text-accent" : "bg-black/[0.06] text-black/50"}`}
+						>
+							{s.has_login ? "Yes" : "No"}
+						</span>
+					),
+				},
+			]}
+			fields={fields}
+			emptyValues={empty}
+			openValues={(): Values => (companies.length === 1 ? { company: companies[0].name } : {})}
+			onChangeField={(key, next) => {
+				if (key !== "designation") return next;
+				const picked = designations.find((d) => d.name === next.designation);
+				// A teaching designation implies a teacher - the checkbox stays editable.
+				return picked ? { ...next, is_instructor: picked.is_teaching_role } : next;
+			}}
+			reload={load}
+			onCreate={(v) =>
+				api.createEmployee({
+					first_name: v.first_name as string,
+					last_name: (v.last_name as string) || undefined,
+					gender: v.gender as string,
+					date_of_birth: v.date_of_birth as string,
+					department: v.department as string,
+					designation: v.designation as string,
+					company: v.company as string,
+					date_of_joining: v.date_of_joining as string,
+					personal_email: (v.personal_email as string) || undefined,
+					password: (v.password as string) || undefined,
+					is_instructor: v.is_instructor === true,
+				})
+			}
+			loadForEdit={async (s) => {
+				const rec = await api.getRecord("employee", s.employee);
+				return Object.fromEntries(
+					["first_name", "last_name", "gender", "date_of_birth", "department", "designation", "date_of_joining", "personal_email"].map(
+						(k) => [k, rec[k] as string],
+					),
+				);
+			}}
+			onUpdate={(s, v) =>
+				api.updateRecord("employee", s.employee, {
+					first_name: v.first_name,
+					last_name: v.last_name,
+					gender: v.gender,
+					date_of_birth: v.date_of_birth,
+					department: v.department,
+					designation: v.designation,
+					date_of_joining: v.date_of_joining,
+					personal_email: v.personal_email,
+				})
+			}
+			deleteVerb="Disable"
+			onDelete={(list) => api.deleteRecords("employee", list.map((s) => s.employee))}
 		/>
 	);
 }

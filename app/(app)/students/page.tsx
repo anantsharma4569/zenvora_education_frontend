@@ -5,12 +5,14 @@ import { api } from "@/lib/api";
 import { useRole } from "@/context/RoleContext";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/DataState";
-import { DataTable } from "@/components/DataTable";
-import { SectionPage } from "@/components/SectionPage";
-import { SubmitButton, inputClass } from "@/components/FormControls";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { inputClass } from "@/components/FormControls";
+import { ResourcePage, type FieldDef, type Values } from "@/components/ResourcePage";
 import type { AcademicYearRow, ProgramRow, StudentGroupRow, StudentRow } from "@/lib/types";
 
-const emptyForm = {
+const GENDERS = ["Male", "Female", "Other"].map((g) => ({ value: g, label: g }));
+
+const empty = (): Values => ({
 	first_name: "",
 	last_name: "",
 	student_email_id: "",
@@ -19,32 +21,30 @@ const emptyForm = {
 	program: "",
 	student_group: "",
 	academic_year: "",
-};
+});
 
 export default function StudentsPage() {
 	const { role } = useRole();
 	const [students, setStudents] = useState<StudentRow[]>([]);
 	const [error, setError] = useState<string | null>(null);
-	const [formOpen, setFormOpen] = useState(false);
 
 	const [programs, setPrograms] = useState<ProgramRow[]>([]);
 	const [studentGroups, setStudentGroups] = useState<StudentGroupRow[]>([]);
 	const [academicYears, setAcademicYears] = useState<AcademicYearRow[]>([]);
 	const [classFilter, setClassFilter] = useState("");
 	const [sectionFilter, setSectionFilter] = useState("");
-	const [form, setForm] = useState(emptyForm);
-	const [submitting, setSubmitting] = useState(false);
-	const [formError, setFormError] = useState<string | null>(null);
 
 	const loadStudents = () => {
 		setError(null);
-		api
+		return api
 			.listStudents({ program: classFilter || undefined, student_group: sectionFilter || undefined })
 			.then(setStudents)
 			.catch((err) => setError(err.message));
 	};
 
-	useEffect(loadStudents, [classFilter, sectionFilter]);
+	useEffect(() => {
+		loadStudents();
+	}, [classFilter, sectionFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// Section only makes sense within a class - drop it whenever the class changes.
 	useEffect(() => {
@@ -69,29 +69,11 @@ export default function StudentsPage() {
 		return na - nb || a.program_name.localeCompare(b.program_name);
 	});
 
-	const sectionsForClass = studentGroups
-		.filter((g) => g.program === classFilter)
-		.sort((a, b) => a.student_group_name.localeCompare(b.student_group_name));
-
-	const formSections = studentGroups
-		.filter((g) => g.program === form.program)
-		.sort((a, b) => a.student_group_name.localeCompare(b.student_group_name));
-
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setSubmitting(true);
-		setFormError(null);
-		try {
-			await api.createStudent(form);
-			setForm(emptyForm);
-			setFormOpen(false);
-			loadStudents();
-		} catch (err) {
-			setFormError((err as Error).message);
-		} finally {
-			setSubmitting(false);
-		}
-	};
+	const sectionsFor = (program: string) =>
+		studentGroups
+			.filter((g) => g.program === program)
+			.sort((a, b) => a.student_group_name.localeCompare(b.student_group_name));
+	const sectionsForClass = sectionsFor(classFilter);
 
 	const subtitle =
 		role === "teacher"
@@ -109,163 +91,169 @@ export default function StudentsPage() {
 		);
 	}
 
-	const table = (
-		<DataTable
-			rows={students}
-			rowKey={(s) => s.name}
-			searchPlaceholder="Search by name..."
-			searchValue={role === "admin" || role === "accounts" ? (s) => s.student_name : undefined}
-			emptyLabel={
-				sectionFilter
-					? "No students found in this section."
-					: classFilter
-						? "No students found in this class."
-						: "No students found."
-			}
-			filters={
-				(role === "admin" || role === "accounts") && sortedPrograms.length > 0 ? (
-					<>
-						<select
-							className={inputClass}
-							value={classFilter}
-							onChange={(e) => setClassFilter(e.target.value)}
-						>
-							<option value="">All classes</option>
-							{sortedPrograms.map((p) => (
-								<option key={p.name} value={p.name}>
-									{p.program_name}
-								</option>
-							))}
-						</select>
-						{classFilter && sectionsForClass.length > 0 && (
-							<select
-								className={inputClass}
-								value={sectionFilter}
-								onChange={(e) => setSectionFilter(e.target.value)}
-							>
-								<option value="">All sections</option>
-								{sectionsForClass.map((g) => (
-									<option key={g.name} value={g.name}>
-										{g.student_group_name.startsWith(`${classFilter} - `)
-											? `Section ${g.student_group_name.slice(classFilter.length + 3)}`
-											: g.student_group_name}
-									</option>
-								))}
-							</select>
-						)}
-					</>
-				) : undefined
-			}
-			columns={[
-				{ key: "student_name", label: "Name", sortable: true, value: (s) => s.student_name },
-				{ key: "student_email_id", label: "Email", value: (s) => s.student_email_id || "-" },
-				{ key: "enabled", label: "Status", value: (s) => (s.enabled ? "Enabled" : "Disabled") },
-			]}
-		/>
-	);
+	const columns: DataTableColumn<StudentRow>[] = [
+		{ key: "student_name", label: "Name", sortable: true, value: (s) => s.student_name },
+		{ key: "program", label: "Class", sortable: true, value: (s) => s.program || "-" },
+		{
+			key: "student_group",
+			label: "Section",
+			sortable: true,
+			value: (s) => s.student_group || "-",
+			render: (s) => (s.student_group ? s.student_group : <span className="text-black/35">No section</span>),
+		},
+		{ key: "student_email_id", label: "Email", value: (s) => s.student_email_id || "-" },
+		{ key: "enabled", label: "Status", value: (s) => (s.enabled ? "Enabled" : "Disabled") },
+	];
+
+	const filters =
+		(role === "admin" || role === "accounts") && sortedPrograms.length > 0 ? (
+			<>
+				<select
+					aria-label="Filter by class"
+					className={inputClass}
+					value={classFilter}
+					onChange={(e) => setClassFilter(e.target.value)}
+				>
+					<option value="">All classes</option>
+					{sortedPrograms.map((p) => (
+						<option key={p.name} value={p.name}>
+							{p.program_name}
+						</option>
+					))}
+				</select>
+				{classFilter && sectionsForClass.length > 0 && (
+					<select
+						aria-label="Filter by section"
+						className={inputClass}
+						value={sectionFilter}
+						onChange={(e) => setSectionFilter(e.target.value)}
+					>
+						<option value="">All sections</option>
+						{sectionsForClass.map((g) => (
+							<option key={g.name} value={g.name}>
+								{g.student_group_name.startsWith(`${classFilter} - `)
+									? `Section ${g.student_group_name.slice(classFilter.length + 3)}`
+									: g.student_group_name}
+							</option>
+						))}
+					</select>
+				)}
+			</>
+		) : undefined;
+
+	const emptyLabel = sectionFilter
+		? "No students found in this section."
+		: classFilter
+			? "No students found in this class."
+			: "No students found.";
 
 	if (role !== "admin") {
 		return (
 			<div>
 				<PageHeader title="Students" subtitle={subtitle} />
-				{table}
+				<DataTable
+					rows={students}
+					rowKey={(s) => s.name}
+					searchPlaceholder="Search by name..."
+					searchValue={role === "accounts" ? (s) => s.student_name : undefined}
+					emptyLabel={emptyLabel}
+					filters={filters}
+					columns={columns}
+				/>
 			</div>
 		);
 	}
 
+	const fields: FieldDef[] = [
+		{ key: "first_name", label: "First Name", type: "text", required: true },
+		{ key: "last_name", label: "Last Name", type: "text" },
+		{
+			key: "student_email_id",
+			label: "Student Email",
+			type: "email",
+			required: true,
+			lockedOnEdit: true,
+			help: "Also the student's login name.",
+		},
+		{ key: "date_of_birth", label: "Date of Birth", type: "date" },
+		{ key: "gender", label: "Gender", type: "select", options: GENDERS },
+		{
+			key: "program",
+			label: "Class (Program)",
+			type: "select",
+			required: true,
+			createOnly: true,
+			options: programs.map((p) => ({ value: p.name, label: p.program_name })),
+		},
+		{
+			key: "student_group",
+			label: "Section",
+			type: "select",
+			createOnly: true,
+			disabled: (v) => !v.program,
+			// Mandatory whenever the chosen class has sections - otherwise a class with none could never be saved.
+			requiredWhen: (v) => !!v.program && sectionsFor(v.program as string).length > 0,
+			options: (v) => sectionsFor(v.program as string).map((g) => ({ value: g.name, label: g.student_group_name })),
+		},
+		{
+			key: "academic_year",
+			label: "Academic Year",
+			type: "select",
+			required: true,
+			createOnly: true,
+			options: academicYears.map((y) => ({ value: y.name, label: y.name })),
+		},
+	];
+
 	return (
-		<SectionPage
+		<ResourcePage<StudentRow>
 			title="Students"
-			count={students.length}
+			singular="Student"
 			description={subtitle}
-			addLabel="+ Add Student"
-			formOpen={formOpen}
-			onToggleForm={() => setFormOpen((v) => !v)}
-			formError={formError}
-			form={
-				<form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-					<input
-						required
-						autoFocus
-						placeholder="First Name"
-						className={inputClass}
-						value={form.first_name}
-						onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-					/>
-					<input
-						placeholder="Last Name"
-						className={inputClass}
-						value={form.last_name}
-						onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-					/>
-					<input
-						required
-						type="email"
-						placeholder="Student Email"
-						className={inputClass}
-						value={form.student_email_id}
-						onChange={(e) => setForm({ ...form, student_email_id: e.target.value })}
-					/>
-					<input
-						type="date"
-						placeholder="Date of Birth"
-						className={inputClass}
-						value={form.date_of_birth}
-						onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
-					/>
-					<select
-						required
-						className={inputClass}
-						value={form.program}
-						onChange={(e) => setForm({ ...form, program: e.target.value, student_group: "" })}
-					>
-						<option value="">Select Program...</option>
-						{programs.map((p) => (
-							<option key={p.name} value={p.name}>
-								{p.program_name}
-							</option>
-						))}
-					</select>
-					<select
-						required={formSections.length > 0}
-						className={inputClass}
-						value={form.student_group}
-						disabled={!form.program}
-						onChange={(e) => setForm({ ...form, student_group: e.target.value })}
-					>
-						<option value="">{form.program ? "Select Section..." : "Select a class first"}</option>
-						{formSections.map((g) => (
-								<option key={g.name} value={g.name}>
-									{g.student_group_name}
-								</option>
-							))}
-					</select>
-					<select
-						required
-						className={inputClass}
-						value={form.academic_year}
-						onChange={(e) => setForm({ ...form, academic_year: e.target.value })}
-					>
-						<option value="">Select Academic Year...</option>
-						{academicYears.map((y) => (
-							<option key={y.name} value={y.name}>
-								{y.name}
-							</option>
-						))}
-					</select>
-
-					{(programs.length === 0 || academicYears.length === 0) && (
-						<p className="text-xs text-black/50 sm:col-span-2 dark:text-white/50">
-							No Programs/Academic Years configured yet - add them in Settings first.
-						</p>
-					)}
-
-					<div className="sm:col-span-2">
-						<SubmitButton submitting={submitting} label="Create Student" />
-					</div>
-				</form>
+			rows={students}
+			rowKey={(s) => s.name}
+			rowLabel={(s) => s.student_name}
+			searchPlaceholder="Search by name..."
+			searchValue={(s) => s.student_name}
+			emptyLabel={emptyLabel}
+			filters={filters}
+			columns={columns}
+			fields={fields}
+			emptyValues={empty}
+			onChangeField={(key, next) => (key === "program" ? { ...next, student_group: "" } : next)}
+			reload={loadStudents}
+			onCreate={(v) =>
+				api.createStudent({
+					first_name: v.first_name as string,
+					last_name: (v.last_name as string) || undefined,
+					student_email_id: v.student_email_id as string,
+					date_of_birth: (v.date_of_birth as string) || undefined,
+					gender: (v.gender as string) || undefined,
+					program: v.program as string,
+					student_group: (v.student_group as string) || undefined,
+					academic_year: v.academic_year as string,
+				})
 			}
-			table={table}
+			loadForEdit={async (s) => {
+				const rec = await api.getRecord("student", s.name);
+				return {
+					first_name: rec.first_name as string,
+					last_name: rec.last_name as string,
+					date_of_birth: rec.date_of_birth as string,
+					gender: rec.gender as string,
+					student_email_id: s.student_email_id ?? "",
+				};
+			}}
+			onUpdate={(s, v) =>
+				api.updateRecord("student", s.name, {
+					first_name: v.first_name,
+					last_name: v.last_name,
+					date_of_birth: v.date_of_birth,
+					gender: v.gender,
+				})
+			}
+			deleteVerb="Disable"
+			onDelete={(list) => api.deleteRecords("student", list.map((s) => s.name))}
 		/>
 	);
 }
