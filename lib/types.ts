@@ -154,3 +154,14 @@ export interface FeeRow {
 	grand_total: number;
 	outstanding_amount: number;
 }
+
+export interface DesignationRow {
+	name: string;
+	is_teaching_role: boolean;
+}
+
+export interface CompanyRow {
+	name: string;
+	default_currency: string;
+	country: string;
+}

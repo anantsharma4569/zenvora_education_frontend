@@ -73,9 +73,11 @@ async function callMethod<T>(
 import type {
 	AcademicTermRow,
 	AcademicYearRow,
+	CompanyRow,
 	CourseRow,
 	DashboardData,
 	DepartmentRow,
+	DesignationRow,
 	EmployeeAttendanceRow,
 	FeeCategoryRow,
 	FeeRow,
@@ -183,6 +185,10 @@ export const api = {
 		term_start_date: string;
 		term_end_date: string;
 	}) => callMethod("zenvora_education.api.settings.create_academic_term", params, { method: "POST" }),
+
+	listCompanies: () => callMethod<CompanyRow[]>("zenvora_education.api.settings.list_companies"),
+
+	listDesignations: () => callMethod<DesignationRow[]>("zenvora_education.api.staff.list_designations"),
 
 	listDepartments: () => callMethod<DepartmentRow[]>("zenvora_education.api.settings.list_departments"),
 

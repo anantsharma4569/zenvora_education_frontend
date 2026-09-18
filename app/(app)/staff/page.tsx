@@ -6,7 +6,7 @@ import { ErrorState } from "@/components/DataState";
 import { DataTable } from "@/components/DataTable";
 import { SectionPage } from "@/components/SectionPage";
 import { SubmitButton, inputClass } from "@/components/FormControls";
-import type { StaffMember } from "@/lib/types";
+import type { CompanyRow, DepartmentRow, DesignationRow, StaffMember } from "@/lib/types";
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 
@@ -39,6 +39,22 @@ export default function StaffPage() {
 	const [form, setForm] = useState(emptyForm);
 	const [submitting, setSubmitting] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
+	const [departments, setDepartments] = useState<DepartmentRow[]>([]);
+	const [companies, setCompanies] = useState<CompanyRow[]>([]);
+	const [designations, setDesignations] = useState<DesignationRow[]>([]);
+
+	useEffect(() => {
+		api.listDepartments().then(setDepartments).catch(() => undefined);
+		api.listDesignations().then(setDesignations).catch(() => undefined);
+		api
+			.listCompanies()
+			.then((rows) => {
+				setCompanies(rows);
+				// A school normally has exactly one Company - don't make the admin pick it.
+				if (rows.length === 1) setForm((f) => ({ ...f, company: f.company || rows[0].name }));
+			})
+			.catch(() => undefined);
+	}, []);
 
 	const load = () => {
 		setError(null);
@@ -59,7 +75,7 @@ export default function StaffPage() {
 		setFormError(null);
 		try {
 			await api.createEmployee({ ...form, password: form.password || undefined });
-			setForm(emptyForm);
+			setForm({ ...emptyForm, company: companies.length === 1 ? companies[0].name : "" });
 			setFormOpen(false);
 			load();
 		} catch (err) {
@@ -119,27 +135,66 @@ export default function StaffPage() {
 						value={form.date_of_birth}
 						onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
 					/>
-					<input
+					<select
 						required
-						placeholder="Department"
 						className={inputClass}
 						value={form.department}
 						onChange={(e) => setForm({ ...form, department: e.target.value })}
-					/>
-					<input
+					>
+						<option value="">Select Department...</option>
+						{departments.map((d) => (
+							<option key={d.name} value={d.name}>
+								{d.department_name}
+							</option>
+						))}
+					</select>
+					<select
 						required
-						placeholder="Designation"
 						className={inputClass}
 						value={form.designation}
-						onChange={(e) => setForm({ ...form, designation: e.target.value })}
-					/>
-					<input
+						onChange={(e) => {
+							const picked = designations.find((d) => d.name === e.target.value);
+							// A teaching designation implies a teacher - still editable below.
+							setForm({
+								...form,
+								designation: e.target.value,
+								is_instructor: picked ? picked.is_teaching_role : form.is_instructor,
+							});
+						}}
+					>
+						<option value="">Select Designation...</option>
+						<optgroup label="Teaching">
+							{designations
+								.filter((d) => d.is_teaching_role)
+								.map((d) => (
+									<option key={d.name} value={d.name}>
+										{d.name}
+									</option>
+								))}
+						</optgroup>
+						<optgroup label="Non-teaching">
+							{designations
+								.filter((d) => !d.is_teaching_role)
+								.map((d) => (
+									<option key={d.name} value={d.name}>
+										{d.name}
+									</option>
+								))}
+						</optgroup>
+					</select>
+					<select
 						required
-						placeholder="Company"
 						className={inputClass}
 						value={form.company}
 						onChange={(e) => setForm({ ...form, company: e.target.value })}
-					/>
+					>
+						<option value="">Select Company...</option>
+						{companies.map((c) => (
+							<option key={c.name} value={c.name}>
+								{c.name}
+							</option>
+						))}
+					</select>
 					<input
 						required
 						type="date"
