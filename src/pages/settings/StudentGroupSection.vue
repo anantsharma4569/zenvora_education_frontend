@@ -13,7 +13,7 @@ const fields = (): FieldDef[] => [
 	{ key: "student_group_name", label: "Section Name", type: "text", required: true, placeholder: "e.g. Grade 10 - A", full: true },
 	{
 		key: "program",
-		label: "Class (Program)",
+		label: "Class",
 		type: "select",
 		required: true,
 		lockedOnEdit: true,

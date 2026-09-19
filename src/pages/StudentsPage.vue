@@ -111,7 +111,7 @@ const fields = (): FieldDef[] => [
 	{ key: "gender", label: "Gender", type: "select", options: GENDERS },
 	{
 		key: "program",
-		label: "Class (Program)",
+		label: "Class",
 		type: "select",
 		required: true,
 		createOnly: true,

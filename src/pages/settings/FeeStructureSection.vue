@@ -26,7 +26,7 @@ const validComponents = (v: Values): string | null => {
 const fields = (): FieldDef[] => [
 	{
 		key: "program",
-		label: "Class (Program)",
+		label: "Class",
 		type: "select",
 		required: true,
 		lockedOnEdit: true,

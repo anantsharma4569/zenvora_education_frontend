@@ -8,7 +8,7 @@ const { rows, load } = useList(api.listPrograms);
 const { rows: departments } = useList(api.listDepartments);
 
 const fields = (): FieldDef[] => [
-	{ key: "program_name", label: "Program Name", type: "text", required: true, placeholder: "e.g. Grade 10" },
+	{ key: "program_name", label: "Class Name", type: "text", required: true, placeholder: "e.g. Grade 10" },
 	{
 		key: "department",
 		label: "Department",
@@ -20,17 +20,17 @@ const fields = (): FieldDef[] => [
 
 <template>
 	<ResourcePage
-		title="Programs"
-		singular="Program"
+		title="Classes"
+		singular="Class"
 		description="The class or grade a student is enrolled in, e.g. Grade 1 to Grade 10"
 		:rows="rows"
 		:row-key="(r) => r.name"
 		:row-label="(r) => r.program_name"
-		search-placeholder="Search programs..."
+		search-placeholder="Search classes..."
 		:search-value="(r) => r.program_name"
-		empty-label="No programs yet."
+		empty-label="No classes yet."
 		:columns="[
-			{ key: 'program_name', label: 'Program', sortable: true, value: (r) => r.program_name },
+			{ key: 'program_name', label: 'Class', sortable: true, value: (r) => r.program_name },
 			{ key: 'department', label: 'Department', sortable: true, value: (r) => r.department || '-' },
 		]"
 		:fields="fields()"

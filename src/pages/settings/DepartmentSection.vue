@@ -24,7 +24,7 @@ const fields = (): FieldDef[] => [
 	<ResourcePage
 		title="Departments"
 		singular="Department"
-		description="Groups staff and programs, e.g. Academics, Administration"
+		description="Groups staff and classes, e.g. Academics, Administration"
 		:rows="rows"
 		:row-key="(r) => r.name"
 		:row-label="(r) => r.department_name"
