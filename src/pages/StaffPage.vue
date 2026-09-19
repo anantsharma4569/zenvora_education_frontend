@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { api } from "@/lib/api";
 import { useList } from "@/lib/useList";
+import { periodRange } from "@/lib/period";
+import { inputClass } from "@/lib/styles";
 import type { FieldDef, Values } from "@/lib/resource";
 import type { StaffMember } from "@/lib/types";
 import ErrorState from "@/components/ErrorState.vue";
@@ -11,16 +14,30 @@ const GENDERS = ["Male", "Female", "Other"].map((g) => ({ value: g, label: g }))
 
 const teachingStaff = ref<StaffMember[]>([]);
 const nonTeachingStaff = ref<StaffMember[]>([]);
-const tab = ref<"teaching" | "non-teaching">("teaching");
+const route = useRoute();
+const tab = ref<"teaching" | "non-teaching">(route.query.tab === "non-teaching" ? "non-teaching" : "teaching");
 const error = ref<string | null>(null);
+
+// Filters. Status is asked from the server; the rest narrow the loaded tab client-side.
+const statusFilter = ref<"Active" | "Inactive" | "all">("Active");
+const designationFilter = ref("");
+const departmentFilter = ref("");
+const loginFilter = ref<"" | "yes" | "no">("");
+const joinedFilter = ref<"" | "week" | "month" | "year" | "custom">("");
+const joinedFrom = ref("");
+const joinedTo = ref("");
 const { rows: departments } = useList(api.listDepartments);
 const { rows: companies } = useList(api.listCompanies);
 const { rows: designations } = useList(api.listDesignations);
 
+// The company isn't asked for: it is the one the chosen department belongs to (else the only/first company).
+const companyFor = (department: string) =>
+	departments.value.find((d) => d.name === department)?.company || companies.value[0]?.name || "";
+
 const load = () => {
 	error.value = null;
 	return api
-		.getStaffDirectory()
+		.getStaffDirectory({ status: statusFilter.value })
 		.then((res) => {
 			teachingStaff.value = res.teachingStaff;
 			nonTeachingStaff.value = res.nonTeachingStaff;
@@ -29,7 +46,55 @@ const load = () => {
 };
 onMounted(load);
 
-const rows = computed(() => (tab.value === "teaching" ? teachingStaff.value : nonTeachingStaff.value));
+const tabRows = computed(() => (tab.value === "teaching" ? teachingStaff.value : nonTeachingStaff.value));
+
+const designationOptions = computed(() => [...new Set(tabRows.value.map((s) => s.designation))].sort());
+const departmentOptions = computed(() => [...new Set(tabRows.value.map((s) => s.department))].sort());
+
+const joinedRange = computed<{ from_date: string; to_date: string } | null>(() => {
+	if (!joinedFilter.value) return null;
+	if (joinedFilter.value === "custom") {
+		return joinedFrom.value || joinedTo.value
+			? { from_date: joinedFrom.value || "0000-01-01", to_date: joinedTo.value || "9999-12-31" }
+			: null;
+	}
+	return periodRange(joinedFilter.value);
+});
+const joinedError = computed(() =>
+	joinedFilter.value === "custom" && joinedFrom.value && joinedTo.value && joinedFrom.value > joinedTo.value
+		? "The 'from' date must be on or before the 'to' date."
+		: null,
+);
+
+const rows = computed(() =>
+	tabRows.value.filter((s) => {
+		if (designationFilter.value && s.designation !== designationFilter.value) return false;
+		if (departmentFilter.value && s.department !== departmentFilter.value) return false;
+		if (loginFilter.value && !!s.has_login !== (loginFilter.value === "yes")) return false;
+		const r = joinedRange.value;
+		if (r && !joinedError.value) {
+			const d = s.date_of_joining;
+			if (!d || d < r.from_date || d > r.to_date) return false;
+		}
+		return true;
+	}),
+);
+
+const activeFilterCount = computed(
+	() =>
+		[designationFilter.value, departmentFilter.value, loginFilter.value, joinedFilter.value].filter(Boolean).length +
+		(statusFilter.value !== "Active" ? 1 : 0),
+);
+const clearFilters = () => {
+	designationFilter.value = departmentFilter.value = loginFilter.value = joinedFilter.value = "";
+	joinedFrom.value = joinedTo.value = "";
+	statusFilter.value = "Active";
+};
+
+// A designation exists on one tab only; the server owns status.
+watch(tab, () => (designationFilter.value = ""));
+watch(statusFilter, load);
+const pillSelect = inputClass;
 const tabs = computed(
 	() =>
 		[
@@ -60,14 +125,6 @@ const fields = (): FieldDef[] => [
 			label: d.name,
 			group: d.is_teaching_role ? "Teaching" : "Non-teaching",
 		})),
-	},
-	{
-		key: "company",
-		label: "Company",
-		type: "select",
-		required: true,
-		createOnly: true,
-		options: companies.value.map((c) => ({ value: c.name, label: c.name })),
 	},
 	{ key: "date_of_joining", label: "Date of Joining", type: "date", required: true },
 	{
@@ -101,7 +158,6 @@ const emptyValues = (): Values => ({
 	date_of_birth: "",
 	department: "",
 	designation: "",
-	company: "",
 	date_of_joining: "",
 	personal_email: "",
 	password: "",
@@ -121,9 +177,9 @@ const EDIT_KEYS = ["first_name", "last_name", "gender", "date_of_birth", "depart
 		:rows="rows"
 		:row-key="(s) => s.employee"
 		:row-label="(s) => `${s.employee_name} (${s.designation})`"
-		:search-placeholder="`Search ${tab === 'teaching' ? 'teaching' : 'non-teaching'} staff...`"
-		:search-value="(s) => s.employee_name"
-		:empty-label="tab === 'teaching' ? 'No teaching staff yet.' : 'No non-teaching staff yet.'"
+		:search-placeholder="`Search ${tab === 'teaching' ? 'teaching' : 'non-teaching'} staff by name or email...`"
+		:search-value="(s) => `${s.employee_name} ${s.personal_email ?? ''}`"
+		:empty-label="activeFilterCount ? 'No staff match these filters.' : tab === 'teaching' ? 'No teaching staff yet.' : 'No non-teaching staff yet.'"
 		:columns="[
 			{ key: 'employee_name', label: 'Name', sortable: true, value: (s) => s.employee_name },
 			{ key: 'department', label: 'Department', sortable: true, value: (s) => s.department },
@@ -134,7 +190,6 @@ const EDIT_KEYS = ["first_name", "last_name", "gender", "date_of_birth", "depart
 		]"
 		:fields="fields()"
 		:empty-values="emptyValues"
-		:open-values="(): Values => (companies.length === 1 ? { company: companies[0].name } : {})"
 		:on-change-field="
 			(key, next) => {
 				if (key !== 'designation') return next;
@@ -153,7 +208,7 @@ const EDIT_KEYS = ["first_name", "last_name", "gender", "date_of_birth", "depart
 					date_of_birth: v.date_of_birth as string,
 					department: v.department as string,
 					designation: v.designation as string,
-					company: v.company as string,
+					company: companyFor(v.department as string),
 					date_of_joining: v.date_of_joining as string,
 					personal_email: (v.personal_email as string) || undefined,
 					password: (v.password as string) || undefined,
@@ -194,6 +249,45 @@ const EDIT_KEYS = ["first_name", "last_name", "gender", "date_of_birth", "depart
 					{{ label }}
 				</button>
 			</div>
+		</template>
+		<template #filters>
+			<select v-model="statusFilter" aria-label="Filter by status" :class="pillSelect">
+				<option value="Active">Active</option>
+				<option value="Inactive">Inactive (disabled)</option>
+				<option value="all">All staff</option>
+			</select>
+			<select v-model="departmentFilter" aria-label="Filter by department" :class="pillSelect">
+				<option value="">All departments</option>
+				<option v-for="d in departmentOptions" :key="d" :value="d">{{ d }}</option>
+			</select>
+			<select v-if="designationOptions.length > 1" v-model="designationFilter" aria-label="Filter by designation" :class="pillSelect">
+				<option value="">All designations</option>
+				<option v-for="d in designationOptions" :key="d" :value="d">{{ d }}</option>
+			</select>
+			<select v-model="loginFilter" aria-label="Filter by login" :class="pillSelect">
+				<option value="">Login: any</option>
+				<option value="yes">Has login</option>
+				<option value="no">No login</option>
+			</select>
+			<select v-model="joinedFilter" aria-label="Filter by joining date" :class="pillSelect">
+				<option value="">Joined: any time</option>
+				<option value="week">Joined this week</option>
+				<option value="month">Joined this month</option>
+				<option value="year">Joined this year</option>
+				<option value="custom">Joined: custom range</option>
+			</select>
+			<template v-if="joinedFilter === 'custom'">
+				<input v-model="joinedFrom" type="date" aria-label="Joined from" :max="joinedTo || undefined" :class="pillSelect" />
+				<input v-model="joinedTo" type="date" aria-label="Joined to" :min="joinedFrom || undefined" :class="pillSelect" />
+			</template>
+			<button
+				v-if="activeFilterCount"
+				class="rounded-full border border-black/15 px-3 py-1.5 text-xs font-medium text-black/60 hover:bg-mint"
+				@click="clearFilters"
+			>
+				Clear filters ({{ activeFilterCount }})
+			</button>
+			<span v-if="joinedError" role="alert" class="w-full text-[12px] font-medium text-danger">{{ joinedError }}</span>
 		</template>
 		<template #cell-has_login="{ row }">
 			<span
