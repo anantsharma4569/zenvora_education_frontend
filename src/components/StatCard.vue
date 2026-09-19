@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import Label from "./Label.vue";
 
-defineProps<{ label: string; value: string | number; note?: string; tone?: "warn" | "danger" }>();
+defineProps<{ label: string; value: string | number; note?: string; tone?: "warn" | "danger"; to?: string }>();
 </script>
 
 <template>
-	<div class="flex min-h-[116px] flex-col justify-between rounded-xl border border-line bg-surface p-[16px_18px]">
+	<component
+		:is="to ? 'RouterLink' : 'div'"
+		:to="to"
+		class="flex min-h-[116px] flex-col justify-between rounded-xl border border-line bg-surface p-[16px_18px]"
+		:class="to ? 'cursor-pointer transition-colors hover:border-accent hover:bg-mint/40' : ''"
+	>
 		<Label>{{ label }}</Label>
 		<div
 			class="mt-2.5 text-[29px] font-semibold leading-none tracking-[-0.03em]"
@@ -14,5 +19,5 @@ defineProps<{ label: string; value: string | number; note?: string; tone?: "warn
 			{{ value }}
 		</div>
 		<div v-if="note" class="mt-2 text-xs text-black/50">{{ note }}</div>
-	</div>
+	</component>
 </template>

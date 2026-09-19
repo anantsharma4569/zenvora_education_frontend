@@ -17,6 +17,9 @@ export const router = createRouter({
 				{ path: "staff", component: () => import("./pages/StaffPage.vue") },
 				{ path: "courses", component: () => import("./pages/CoursesPage.vue") },
 				{ path: "attendance", component: () => import("./pages/AttendancePage.vue") },
+				// Old deep links from the first version of the dashboard cards.
+				{ path: "attendance/present", redirect: { path: "/attendance", query: { status: "Present" } } },
+				{ path: "attendance/absent", redirect: { path: "/attendance", query: { status: "Absent" } } },
 				{ path: "exams", component: () => import("./pages/ExamsPage.vue") },
 				{ path: "fees", component: () => import("./pages/FeesPage.vue") },
 				{ path: "settings", component: settingsPage("SettingsIndex") },
@@ -29,6 +32,7 @@ export const router = createRouter({
 						{ path: "academic-terms", component: settingsPage("AcademicTermSection") },
 						{ path: "programs", component: settingsPage("ProgramSection") },
 						{ path: "student-groups", component: settingsPage("StudentGroupSection") },
+						{ path: "course-schedules", component: settingsPage("CourseScheduleSection") },
 						{ path: "fee-categories", component: settingsPage("FeeCategorySection") },
 						{ path: "fee-structures", component: settingsPage("FeeStructureSection") },
 					],

@@ -3,6 +3,7 @@ export type Role = "admin" | "teacher" | "accounts" | "student";
 export interface Session {
 	user: string;
 	authenticated: boolean;
+	csrf_token?: string | null;
 }
 
 export interface DashboardData {
@@ -112,6 +113,32 @@ export interface AcademicYearRow {
 	name: string;
 	year_start_date?: string;
 	year_end_date?: string;
+}
+
+export interface InstructorRow {
+	name: string;
+	instructor_name: string;
+}
+
+export interface RoomRow {
+	name: string;
+	room_name: string;
+	room_number: string | null;
+	seating_capacity: number | null;
+}
+
+export interface CourseScheduleRow {
+	name: string;
+	student_group: string;
+	program: string;
+	course: string;
+	instructor: string;
+	instructor_name: string;
+	room: string;
+	schedule_date: string;
+	from_time: string;
+	to_time: string;
+	class_schedule_color: string | null;
 }
 
 export interface DepartmentRow {

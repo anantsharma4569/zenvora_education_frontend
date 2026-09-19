@@ -37,10 +37,25 @@ function extractErrorMessage(status: number, body: string): { message: string; s
 	return { message: `Request failed (${status})`, sessionExpired: false };
 }
 
+// Frappe rejects cookie-session POSTs that lack the session's CSRF token once one exists.
+let csrfToken: string | null = null;
+
+async function refreshCsrfToken(): Promise<string | null> {
+	try {
+		const url = new URL(`${FRAPPE_URL}/api/method/zenvora_education.api.auth.get_session`, window.location.origin);
+		const res = await fetch(url.toString(), { credentials: "include" });
+		csrfToken = ((await res.json()).message?.csrf_token as string | null | undefined) ?? null;
+	} catch {
+		csrfToken = null;
+	}
+	return csrfToken;
+}
+
 async function callMethod<T>(
 	method: string,
 	params: Record<string, unknown> = {},
 	options: { method?: "GET" | "POST" } = {},
+	retried = false,
 ): Promise<T> {
 	const httpMethod = options.method || "GET";
 	const url = new URL(`${FRAPPE_URL}/api/method/${method}`, window.location.origin);
@@ -61,9 +76,19 @@ async function callMethod<T>(
 		init.body = JSON.stringify(params);
 	}
 
+	if (httpMethod === "POST" && method !== "login" && method !== "logout") {
+		if (!csrfToken) await refreshCsrfToken();
+		if (csrfToken) (init.headers as Record<string, string>)["X-Frappe-CSRF-Token"] = csrfToken;
+	}
+
 	const response = await fetch(url.toString(), init);
 	if (!response.ok) {
 		const body = await response.text();
+		// A stale token (new login, session rotated): fetch a fresh one and retry once.
+		if (httpMethod === "POST" && !retried && response.status === 400 && body.includes("CSRFTokenError")) {
+			await refreshCsrfToken();
+			return callMethod<T>(method, params, options, true);
+		}
 		const { message, sessionExpired } = extractErrorMessage(response.status, body);
 		if (sessionExpired && window.location.pathname !== "/login") {
 			window.location.href = "/login";
@@ -80,6 +105,7 @@ import type {
 	AcademicYearRow,
 	CompanyRow,
 	CourseRow,
+	CourseScheduleRow,
 	DashboardData,
 	DepartmentRow,
 	DesignationRow,
@@ -87,8 +113,10 @@ import type {
 	FeeCategoryRow,
 	FeeRow,
 	FeeStructureRow,
+	InstructorRow,
 	ProgramRow,
 	ResultRow,
+	RoomRow,
 	Session,
 	StaffMember,
 	StudentAttendanceRow,
@@ -99,16 +127,30 @@ import type {
 export const api = {
 	getSession: () => callMethod<Session>("zenvora_education.api.auth.get_session"),
 
-	login: (usr: string, pwd: string) => callMethod<string>("login", { usr, pwd }, { method: "POST" }),
+	login: (usr: string, pwd: string) => {
+		csrfToken = null; // new session, new token
+		return callMethod<string>("login", { usr, pwd }, { method: "POST" });
+	},
 
-	logout: () => callMethod("logout", {}, { method: "POST" }),
+	logout: () => {
+		csrfToken = null;
+		return callMethod("logout", {}, { method: "POST" });
+	},
 
 	getDashboard: () => callMethod<DashboardData>("zenvora_education.api.dashboard.get_dashboard"),
 
-	getEmployeeAttendance: (params?: { employee?: string; from_date?: string; to_date?: string }) =>
+	getEmployeeAttendance: (params?: { employee?: string; from_date?: string; to_date?: string; status?: string }) =>
 		callMethod<EmployeeAttendanceRow[]>("zenvora_education.api.attendance.get_employee_attendance", params),
 
-	getStudentAttendance: (params?: { student_group?: string; date?: string }) =>
+	getStudentAttendance: (params?: {
+		student_group?: string;
+		date?: string;
+		status?: string;
+		from_date?: string;
+		to_date?: string;
+		program?: string;
+		student?: string;
+	}) =>
 		callMethod<StudentAttendanceRow[]>("zenvora_education.api.attendance.get_student_attendance", params),
 
 	getMyAttendance: (params?: { from_date?: string; to_date?: string }) =>
@@ -135,10 +177,10 @@ export const api = {
 		password?: string;
 	}) => callMethod("zenvora_education.api.employee.create_employee", params, { method: "POST" }),
 
-	getStaffDirectory: (company?: string) =>
+	getStaffDirectory: (params?: { company?: string; status?: "Active" | "Inactive" | "all" }) =>
 		callMethod<{ teaching_staff: StaffMember[]; non_teaching_staff: StaffMember[] }>(
 			"zenvora_education.api.staff.get_staff_directory",
-			company ? { company } : {},
+			params ?? {},
 		).then((res) => ({ teachingStaff: res.teaching_staff, nonTeachingStaff: res.non_teaching_staff })),
 
 	listCourses: (params?: { department?: string }) =>
@@ -204,6 +246,42 @@ export const api = {
 		callMethod<{ name: string; ok: boolean; message: string }[]>(
 			"zenvora_education.api.crud.delete_records",
 			{ resource, names },
+			{ method: "POST" },
+		),
+
+	listInstructors: () => callMethod<InstructorRow[]>("zenvora_education.api.schedule.list_instructors"),
+
+	listRooms: () => callMethod<RoomRow[]>("zenvora_education.api.schedule.list_rooms"),
+
+	listCourseSchedules: () =>
+		callMethod<CourseScheduleRow[]>("zenvora_education.api.schedule.list_course_schedules"),
+
+	createCourseSchedule: (params: {
+		student_group: string;
+		course: string;
+		instructor: string;
+		room: string;
+		schedule_date: string;
+		from_time: string;
+		to_time: string;
+		class_schedule_color?: string;
+	}) => callMethod("zenvora_education.api.schedule.create_course_schedule", params, { method: "POST" }),
+
+	createCourseSchedulesBulk: (params: {
+		student_group: string;
+		course: string;
+		instructor: string;
+		room: string;
+		from_time: string;
+		to_time: string;
+		start_date: string;
+		end_date: string;
+		days: string[];
+		class_schedule_color?: string;
+	}) =>
+		callMethod<{ created: number; skipped: { date: string; reason: string }[] }>(
+			"zenvora_education.api.schedule.create_course_schedules_bulk",
+			params,
 			{ method: "POST" },
 		),
 

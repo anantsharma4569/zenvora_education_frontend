@@ -42,6 +42,7 @@ interface Attention {
 }
 
 const { role } = storeToRefs(useSession());
+const isAdmin = computed(() => role.value === "admin");
 const data = ref<DashboardData | null>(null);
 const error = ref<string | null>(null);
 
@@ -167,17 +168,28 @@ const staffRows = computed(() => [
 		</header>
 
 		<section class="grid grid-cols-[repeat(auto-fit,minmax(158px,1fr))] gap-[13px]">
-			<div class="flex min-h-[116px] flex-col justify-between rounded-xl border border-line bg-surface p-[16px_18px]">
+			<component
+				:is="isAdmin ? 'RouterLink' : 'div'"
+				:to="isAdmin ? '/attendance?status=Present' : undefined"
+				class="flex min-h-[116px] flex-col justify-between rounded-xl border border-line bg-surface p-[16px_18px]"
+				:class="isAdmin ? 'cursor-pointer transition-colors hover:border-accent hover:bg-mint/40' : ''"
+			>
 				<Label>Attendance today</Label>
 				<div class="mt-2.5 text-[32px] font-semibold leading-none tracking-[-0.03em]">
 					{{ rate.toFixed(1) }}<span class="text-[18px] font-medium">%</span>
 				</div>
 				<div class="mt-2.5"><Bar :pct="rate" /></div>
-			</div>
-			<StatCard label="Students" :value="NUM.format(data.student_count ?? 0)" />
-			<StatCard label="Present" :value="NUM.format(present)" :note="`of ${NUM.format(marked)} marked`" />
-			<StatCard label="Absent" :value="NUM.format(absent)" tone="warn" />
+			</component>
+			<StatCard label="Students" :value="NUM.format(data.student_count ?? 0)" :to="isAdmin ? '/students' : undefined" />
 			<StatCard
+				label="Present"
+				:value="NUM.format(present)"
+				:note="`of ${NUM.format(marked)} marked`"
+				:to="isAdmin ? '/attendance?status=Present' : undefined"
+			/>
+			<StatCard label="Absent" :value="NUM.format(absent)" tone="warn" :to="isAdmin ? '/attendance?status=Absent' : undefined" />
+			<StatCard
+				:to="isAdmin ? '/staff?tab=teaching' : undefined"
 				label="Instructors"
 				:value="NUM.format(data.instructor_count ?? 0)"
 				:note="`${NUM.format(data.employee_count ?? 0)} employees`"
