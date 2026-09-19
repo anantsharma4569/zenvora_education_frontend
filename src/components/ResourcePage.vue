@@ -309,7 +309,7 @@ const rowActionBtn = "rounded-full border border-black/15 px-3 py-1 text-xs font
 						:label="f.label"
 						:required="isRequired(f)"
 						:error="f.type === 'custom' ? undefined : fieldErrors[f.key]"
-						:help="isEditing && f.lockedOnEdit ? `Can't be changed after creation.` : f.help"
+						:help="isEditing && f.lockedOnEdit ? `Can't be changed after creation.` : typeof f.help === 'function' ? f.help(values) : f.help"
 						:full="f.full || f.type === 'textarea' || f.type === 'custom'"
 					>
 						<textarea
@@ -369,6 +369,8 @@ const rowActionBtn = "rounded-full border border-black/15 px-3 py-1 text-xs font
 							:aria-invalid="!!fieldErrors[f.key]"
 							:autocomplete="f.type === 'password' ? 'new-password' : undefined"
 							:placeholder="f.placeholder"
+							:min="f.min?.(values)"
+							:max="f.max?.(values)"
 							:value="(values[f.key] as string) ?? ''"
 							@input="setField(f.key, ($event.target as HTMLInputElement).value)"
 						/>

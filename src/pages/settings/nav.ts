@@ -20,8 +20,9 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
 	{
 		label: "Academics",
 		items: [
-			{ slug: "programs", label: "Programs" },
+			{ slug: "programs", label: "Classes" },
 			{ slug: "student-groups", label: "Student Groups (Class/Section)" },
+			{ slug: "course-schedules", label: "Course Schedule" },
 		],
 	},
 	{

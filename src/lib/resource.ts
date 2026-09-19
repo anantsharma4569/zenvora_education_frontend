@@ -10,13 +10,16 @@ export interface Option {
 export interface FieldDef {
 	key: string;
 	label: string;
-	type: "text" | "email" | "number" | "date" | "password" | "textarea" | "select" | "checkbox" | "custom";
+	type: "text" | "email" | "number" | "date" | "time" | "password" | "textarea" | "select" | "checkbox" | "custom";
 	required?: boolean;
 	/** Mandatory only in some situations (e.g. email is required once a password is typed). */
 	requiredWhen?: (v: Values) => boolean;
 	options?: Option[] | ((v: Values) => Option[]);
 	placeholder?: string;
-	help?: string;
+	help?: string | ((v: Values) => string | undefined);
+	/** Bounds for date/number inputs, computed from the other values (e.g. the section's term). */
+	min?: (v: Values) => string | undefined;
+	max?: (v: Values) => string | undefined;
 	/** Span both columns of the form grid. */
 	full?: boolean;
 	/** Only on the Add form (hidden while editing). */
