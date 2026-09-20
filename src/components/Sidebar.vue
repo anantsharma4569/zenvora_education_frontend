@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
 	{ href: "/staff", label: "Staff", roles: ["admin"] },
 	{ href: "/courses", label: "Courses", roles: ["admin", "teacher", "student"] },
 	{ href: "/attendance", label: "Attendance", roles: ["admin", "teacher", "student"] },
+	{ href: "/timetable", label: "Time Table", roles: ["admin", "teacher", "student"] },
 	{ href: "/exams", label: "Exams & Results", roles: ["admin", "teacher", "student"] },
 	{ href: "/fees", label: "Fees / Billing", roles: ["admin", "accounts", "student"] },
 	{ href: "/settings", label: "Settings", roles: ["admin"] },

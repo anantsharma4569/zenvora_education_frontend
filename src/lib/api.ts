@@ -122,6 +122,8 @@ import type {
 	StudentAttendanceRow,
 	StudentGroupRow,
 	StudentRow,
+	TimetableOptions,
+	TimetableRow,
 } from "./types";
 
 export const api = {
@@ -252,6 +254,12 @@ export const api = {
 	listInstructors: () => callMethod<InstructorRow[]>("zenvora_education.api.schedule.list_instructors"),
 
 	listRooms: () => callMethod<RoomRow[]>("zenvora_education.api.schedule.list_rooms"),
+
+	getTimetableOptions: () => callMethod<TimetableOptions>("zenvora_education.api.timetable.get_timetable_options"),
+	getTimetable: (student_group: string, from_date: string, to_date: string) =>
+		callMethod<TimetableRow[]>("zenvora_education.api.timetable.get_timetable", { student_group, from_date, to_date }),
+	getMyTimetable: (from_date: string, to_date: string) =>
+		callMethod<TimetableRow[]>("zenvora_education.api.timetable.get_my_timetable", { from_date, to_date }),
 
 	listCourseSchedules: () =>
 		callMethod<CourseScheduleRow[]>("zenvora_education.api.schedule.list_course_schedules"),

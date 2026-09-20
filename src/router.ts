@@ -17,6 +17,7 @@ export const router = createRouter({
 				{ path: "staff", component: () => import("./pages/StaffPage.vue") },
 				{ path: "courses", component: () => import("./pages/CoursesPage.vue") },
 				{ path: "attendance", component: () => import("./pages/AttendancePage.vue") },
+				{ path: "timetable", component: () => import("./pages/TimeTablePage.vue") },
 				// Old deep links from the first version of the dashboard cards.
 				{ path: "attendance/present", redirect: { path: "/attendance", query: { status: "Present" } } },
 				{ path: "attendance/absent", redirect: { path: "/attendance", query: { status: "Absent" } } },

@@ -11,6 +11,10 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [vue(), tailwindcss()],
 		resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+		// FullCalendar ships several packages that must share one @fullcalendar/core; pre-bundle them together.
+		optimizeDeps: {
+			include: ["@fullcalendar/vue3", "@fullcalendar/core", "@fullcalendar/daygrid", "@fullcalendar/timegrid", "@fullcalendar/interaction"],
+		},
 		server: {
 			port: 3000,
 			strictPort: true,

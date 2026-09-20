@@ -200,3 +200,25 @@ export interface CompanyRow {
 	default_currency: string;
 	country: string;
 }
+
+export interface TimetableRow {
+	name: string;
+	student_group: string;
+	student_group_name: string;
+	program: string;
+	course: string;
+	course_name: string;
+	instructor: string;
+	instructor_name: string;
+	room: string;
+	room_name: string;
+	schedule_date: string;
+	from_time: string;
+	to_time: string;
+	color: string;
+}
+
+export interface TimetableOptions {
+	programs: { name: string; program_name: string }[];
+	sections: { name: string; student_group_name: string; program: string }[];
+}
