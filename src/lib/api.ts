@@ -120,6 +120,7 @@ import type {
 	Session,
 	StaffMember,
 	StudentAttendanceRow,
+	StudentDetail,
 	StudentGroupRow,
 	StudentRow,
 	TimetableOptions,
@@ -193,6 +194,9 @@ export const api = {
 
 	listStudents: (params?: { search?: string; program?: string; student_group?: string }) =>
 		callMethod<StudentRow[]>("zenvora_education.api.student.list_students", params),
+
+	getStudentDetail: (name: string) =>
+		callMethod<StudentDetail>("zenvora_education.api.student.get_student_detail", { name }),
 
 	getResults: (params?: { student_group?: string }) =>
 		callMethod<ResultRow[]>("zenvora_education.api.exam.get_results", params),

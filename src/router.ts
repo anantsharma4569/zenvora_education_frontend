@@ -14,6 +14,7 @@ export const router = createRouter({
 			children: [
 				{ path: "dashboard", component: () => import("./pages/DashboardPage.vue") },
 				{ path: "students", component: () => import("./pages/StudentsPage.vue") },
+				{ path: "students/:name", component: () => import("./pages/StudentDetailPage.vue") },
 				{ path: "staff", component: () => import("./pages/StaffPage.vue") },
 				{ path: "courses", component: () => import("./pages/CoursesPage.vue") },
 				{ path: "attendance", component: () => import("./pages/AttendancePage.vue") },

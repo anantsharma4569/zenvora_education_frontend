@@ -183,6 +183,9 @@ const emptyValues = (): Values => ({
 						</select>
 					</template>
 				</template>
+				<template #cell-student_name="{ row }">
+					<RouterLink :to="`/students/${row.name}`" class="font-medium text-accent hover:underline">{{ row.student_name }}</RouterLink>
+				</template>
 				<template #cell-student_group="{ row }">
 					<template v-if="row.student_group">{{ row.student_group }}</template>
 					<span v-else class="text-black/35">No section</span>
@@ -259,11 +262,15 @@ const emptyValues = (): Values => ({
 						</select>
 					</template>
 				</template>
+				<template #cell-student_name="{ row }">
+					<RouterLink :to="`/students/${row.name}`" class="font-medium text-accent hover:underline">{{ row.student_name }}</RouterLink>
+				</template>
 				<template #cell-student_group="{ row }">
 					<template v-if="row.student_group">{{ row.student_group }}</template>
 					<span v-else class="text-black/35">No section</span>
 				</template>
 			</ResourcePage>
 		</template>
+
 	</div>
 </template>

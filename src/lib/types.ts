@@ -80,6 +80,37 @@ export interface CourseRow {
 	description?: string | null;
 }
 
+export interface StudentGuardian {
+	name: string;
+	relation: string;
+	guardian_name: string;
+	email_address?: string | null;
+	mobile_number?: string | null;
+}
+
+export interface StudentDetail {
+	name: string;
+	student_name: string;
+	first_name: string;
+	last_name: string;
+	gender: string;
+	date_of_birth: string;
+	blood_group: string;
+	nationality: string;
+	student_email_id: string;
+	student_mobile_number: string;
+	joining_date: string;
+	enabled: boolean;
+	image: string | null;
+	address: string;
+	program: string | null;
+	student_group: string | null;
+	guardians: StudentGuardian[];
+	attendance: { present: number; absent: number; leave: number; marked: number; percent: number | null };
+	fees: { invoice_count: number; outstanding_total: number };
+	recent_results: { name: string; course: string; total_score: number; maximum_score: number; grade: string }[];
+}
+
 export interface StudentRow {
 	name: string;
 	student_name: string;
