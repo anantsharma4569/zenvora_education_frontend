@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import LoadingState from "@/components/LoadingState.vue";
 import ErrorState from "@/components/ErrorState.vue";
-import EmptyState from "@/components/EmptyState.vue";
+import LoadingState from "@/components/LoadingState.vue";
+import DataTable, { type DataTableColumn } from "@/components/DataTable.vue";
 
 const props = defineProps<{
 	fetch: () => Promise<object[]>;
@@ -19,22 +19,17 @@ onMounted(() =>
 		.then((v) => (rows.value = v as Record<string, unknown>[]))
 		.catch((err) => (error.value = err.message)),
 );
+
+const tableColumns: DataTableColumn<Record<string, unknown>>[] = props.columns.map((c) => ({
+	key: c.key,
+	label: c.label,
+	sortable: true,
+	value: (row) => String(row[c.key] ?? "-"),
+}));
 </script>
 
 <template>
 	<ErrorState v-if="error" :message="error" />
 	<LoadingState v-else-if="!rows" />
-	<EmptyState v-else-if="rows.length === 0" :label="empty" />
-	<table v-else class="w-full text-left text-sm">
-		<thead class="text-black/50">
-			<tr>
-				<th v-for="c in columns" :key="c.key" class="py-2">{{ c.label }}</th>
-			</tr>
-		</thead>
-		<tbody>
-			<tr v-for="(row, i) in rows" :key="String(row.name ?? i)" class="border-t border-black/10">
-				<td v-for="c in columns" :key="c.key" class="py-2">{{ row[c.key] }}</td>
-			</tr>
-		</tbody>
-	</table>
+	<DataTable v-else :rows="rows" :row-key="(row) => String(row.name ?? rows!.indexOf(row))" :columns="tableColumns" :empty-label="empty" />
 </template>

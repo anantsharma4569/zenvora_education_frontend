@@ -8,8 +8,8 @@ defineProps<{ label: string; value: string | number; note?: string; tone?: "warn
 	<component
 		:is="to ? 'RouterLink' : 'div'"
 		:to="to"
-		class="flex min-h-[116px] flex-col justify-between rounded-xl border border-line bg-surface p-[16px_18px]"
-		:class="to ? 'cursor-pointer transition-colors hover:border-accent hover:bg-mint/40' : ''"
+		class="flex min-h-[116px] flex-col justify-between rounded-xl border border-line bg-surface p-[16px_18px] shadow-sm transition-[box-shadow,border-color,background-color] hover:shadow-md"
+		:class="to ? 'cursor-pointer hover:border-accent hover:bg-mint/40' : ''"
 	>
 		<Label>{{ label }}</Label>
 		<div

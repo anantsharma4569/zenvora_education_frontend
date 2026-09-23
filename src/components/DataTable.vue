@@ -95,12 +95,12 @@ watchEffect(() => {
 	if (selectAllBox.value) selectAllBox.value.indeterminate = !allSelected.value && !!someSelected.value;
 });
 
-const checkbox = "h-4 w-4 cursor-pointer rounded border-black/30 accent-[#0f7b4a]";
+const checkbox = "h-[15px] w-[15px] cursor-pointer rounded-[4px] border-black/30 accent-[#0f7b4a]";
 const pill = "rounded-full border border-black/[0.15] px-3 py-1 hover:bg-mint disabled:opacity-45";
 </script>
 
 <template>
-	<div class="rounded-2xl border border-line bg-surface px-[18px] pb-3.5 pt-4">
+	<div class="rounded-2xl border border-line bg-surface px-[18px] pb-3.5 pt-4 shadow-sm">
 		<div class="mb-3.5 flex flex-wrap items-center gap-2.5">
 			<input
 				v-if="searchValue"
@@ -127,7 +127,7 @@ const pill = "rounded-full border border-black/[0.15] px-3 py-1 hover:bg-mint di
 			<div class="-mx-[18px] overflow-x-auto px-[18px]">
 				<table class="w-full text-left text-[13px]" :style="{ minWidth: `${minWidth}px` }">
 					<thead>
-						<tr>
+						<tr class="border-b border-line-soft">
 							<th v-if="selectable" class="w-9 pb-2.5 pr-2">
 								<input
 									ref="selectAllBox"
