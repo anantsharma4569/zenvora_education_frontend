@@ -55,6 +55,31 @@ export interface StaffMember {
 	has_login?: boolean;
 }
 
+export interface EmployeeDetail {
+	name: string;
+	employee_name: string;
+	first_name: string;
+	last_name: string;
+	gender: string;
+	date_of_birth: string;
+	date_of_joining: string;
+	status: string;
+	department: string;
+	designation: string;
+	company: string;
+	personal_email: string;
+	cell_number: string;
+	current_address: string;
+	blood_group: string;
+	marital_status: string;
+	image: string | null;
+	has_login: boolean;
+	is_teaching_role: boolean;
+	instructor: string | null;
+	sections: string[];
+	attendance: { present: number; absent: number; on_leave: number; marked: number; percent: number | null };
+}
+
 export interface EmployeeAttendanceRow {
 	name: string;
 	employee: string;

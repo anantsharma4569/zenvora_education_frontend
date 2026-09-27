@@ -16,6 +16,7 @@ export const router = createRouter({
 				{ path: "students", component: () => import("./pages/StudentsPage.vue") },
 				{ path: "students/:name", component: () => import("./pages/StudentDetailPage.vue") },
 				{ path: "staff", component: () => import("./pages/StaffPage.vue") },
+				{ path: "staff/:employee", component: () => import("./pages/StaffDetailPage.vue") },
 				{ path: "courses", component: () => import("./pages/CoursesPage.vue") },
 				{ path: "attendance", component: () => import("./pages/AttendancePage.vue") },
 				{ path: "timetable", component: () => import("./pages/TimeTablePage.vue") },

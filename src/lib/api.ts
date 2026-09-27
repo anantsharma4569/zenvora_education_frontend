@@ -110,6 +110,7 @@ import type {
 	DepartmentRow,
 	DesignationRow,
 	EmployeeAttendanceRow,
+	EmployeeDetail,
 	FeeCategoryRow,
 	FeeRow,
 	FeeStructureRow,
@@ -185,6 +186,9 @@ export const api = {
 			"zenvora_education.api.staff.get_staff_directory",
 			params ?? {},
 		).then((res) => ({ teachingStaff: res.teaching_staff, nonTeachingStaff: res.non_teaching_staff })),
+
+	getEmployeeDetail: (employee: string) =>
+		callMethod<EmployeeDetail>("zenvora_education.api.staff.get_employee_detail", { employee }),
 
 	listCourses: (params?: { department?: string }) =>
 		callMethod<CourseRow[]>("zenvora_education.api.course.list_courses", params),

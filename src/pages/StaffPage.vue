@@ -289,6 +289,9 @@ const EDIT_KEYS = ["first_name", "last_name", "gender", "date_of_birth", "depart
 			</button>
 			<span v-if="joinedError" role="alert" class="w-full text-[12px] font-medium text-danger">{{ joinedError }}</span>
 		</template>
+		<template #cell-employee_name="{ row }">
+			<RouterLink :to="`/staff/${row.employee}`" class="font-medium text-accent hover:underline">{{ row.employee_name }}</RouterLink>
+		</template>
 		<template #cell-has_login="{ row }">
 			<span
 				class="rounded-full px-2.5 py-0.5 text-xs font-medium"
