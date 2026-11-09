@@ -9,7 +9,41 @@ import type { CalendarOptions, EventInput } from "@fullcalendar/core";
 import { api } from "@/lib/api";
 import { useSession } from "@/stores/session";
 import { inputClass } from "@/lib/styles";
-import type { TimetableRow } from "@/lib/types";
+import type { Slot } from "@/lib/types";
+
+/** The shape this page was built around; lessons from the API are mapped onto it. */
+interface TimetableRow {
+	name: string;
+	student_group: string;
+	student_group_name: string;
+	program: string;
+	course: string;
+	course_name: string;
+	instructor: string;
+	instructor_name: string;
+	room: string;
+	room_name: string;
+	schedule_date: string;
+	from_time: string;
+	to_time: string;
+	color: string;
+}
+const toRow = (x: Slot): TimetableRow => ({
+	name: x.id,
+	student_group: x.section.id,
+	student_group_name: x.section.name,
+	program: x.class.name,
+	course: x.subject.id,
+	course_name: x.subject.name,
+	instructor: x.teacher.id,
+	instructor_name: x.teacher.name,
+	room: x.room.id,
+	room_name: x.room.name,
+	schedule_date: x.date,
+	from_time: x.startTime,
+	to_time: x.endTime,
+	color: x.color ?? "",
+});
 import Modal from "@/components/Modal.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import EmptyState from "@/components/EmptyState.vue";
@@ -62,11 +96,11 @@ watch(
 	isAdmin,
 	(admin) => {
 		if (!admin) return;
-		api
-			.getTimetableOptions()
+		api.timetable
+			.options()
 			.then((o) => {
-				programs.value = o.programs;
-				sections.value = o.sections;
+				programs.value = o.classes.map((c) => ({ name: c.id, program_name: c.name }));
+				sections.value = o.sections.map((x) => ({ name: x.id, student_group_name: x.name, program: x.classId }));
 			})
 			.catch(() => undefined);
 	},
@@ -94,8 +128,8 @@ watch(
 		error.value = null;
 		try {
 			const { from, to } = range.value;
-			const data = isAdmin.value ? await api.getTimetable(section.value, from, to) : await api.getMyTimetable(from, to);
-			if (mine === seq) rows.value = data;
+			const data = isAdmin.value ? await api.timetable.section(section.value, from, to) : await api.timetable.mine(from, to);
+			if (mine === seq) rows.value = data.map(toRow);
 		} catch (e) {
 			if (mine === seq) {
 				rows.value = [];
@@ -263,7 +297,11 @@ const options = computed<CalendarOptions>(() => ({
 		}
 		const m = document.createElement("div");
 		m.className = "tt-block-meta";
-		if (status === "leave") m.innerHTML = `<s>${other}</s>`;
+		if (status === "leave") {
+			const struck = document.createElement("s");
+			struck.textContent = other;
+			m.append(struck);
+		}
 		else m.textContent = [other, room].filter(Boolean).join(" · ");
 		el.append(m);
 		return { domNodes: [el] };
