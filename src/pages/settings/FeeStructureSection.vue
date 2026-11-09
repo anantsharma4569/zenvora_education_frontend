@@ -1,144 +1,156 @@
 <script setup lang="ts">
-import { api } from "@/lib/api";
+import { api, deleteEach } from "@/lib/api";
 import { useList } from "@/lib/useList";
 import { inputClass } from "@/lib/styles";
+import { money, toPaise, toRupees } from "@/lib/format";
 import type { FieldDef, Values } from "@/lib/resource";
+import type { FeeStructure } from "@/lib/types";
 import ResourcePage from "@/components/ResourcePage.vue";
 
-type Component = { fees_category: string; amount: string };
+/** One line of the form; amount is typed in rupees. */
+type Item = { feeCategoryId: string; amount: string };
 
-const { rows, load } = useList(api.listFeeStructures);
-const { rows: programs } = useList(api.listPrograms);
-const { rows: years } = useList(api.listAcademicYears);
-const { rows: terms } = useList(() => api.listAcademicTerms());
-const { rows: categories } = useList(api.listFeeCategories);
+const { rows, load } = useList(() => api.feeStructures.list());
+const { rows: classes } = useList(() => api.classes.list());
+const { rows: years } = useList(() => api.academicYears.list());
+const { rows: terms } = useList(() => api.academicTerms.list());
+const { rows: categories } = useList(() => api.feeCategories.list());
 
-const blank = (): Component => ({ fees_category: "", amount: "" });
+const blank = (): Item => ({ feeCategoryId: "", amount: "" });
+const itemsOf = (v: Values) => (v.items as Item[] | undefined) ?? [];
 
-const validComponents = (v: Values): string | null => {
-	const list = (v.components as Component[]) ?? [];
-	if (list.length === 0 || list.some((c) => !c.fees_category || c.amount === "" || Number(c.amount) < 0)) {
-		return "Every fee component needs a Fee Category and an Amount";
+const validItems = (v: Values): string | null => {
+	const list = itemsOf(v);
+	if (list.length === 0 || list.some((c) => !c.feeCategoryId || c.amount === "" || Number(c.amount) < 0)) {
+		return "Every line needs a fee category and an amount";
 	}
+	if (new Set(list.map((c) => c.feeCategoryId)).size !== list.length) return "Each fee category can appear only once";
 	return null;
 };
 
 const fields = (): FieldDef[] => [
 	{
-		key: "program",
+		key: "classId",
 		label: "Class",
 		type: "select",
 		required: true,
 		lockedOnEdit: true,
-		options: programs.value.map((p) => ({ value: p.name, label: p.program_name })),
+		options: classes.value.map((c) => ({ value: c.id, label: c.name })),
 	},
 	{
-		key: "academic_year",
+		key: "academicYearId",
 		label: "Academic Year",
 		type: "select",
 		required: true,
 		lockedOnEdit: true,
-		options: years.value.map((y) => ({ value: y.name, label: y.name })),
+		options: years.value.map((y) => ({ value: y.id, label: y.name })),
 	},
 	{
-		key: "academic_term",
+		key: "academicTermId",
 		label: "Academic Term",
 		type: "select",
-		options: (v) =>
-			terms.value.filter((t) => t.academic_year === v.academic_year).map((t) => ({ value: t.name, label: t.term_name })),
-		help: "Pick an Academic Year first.",
+		placeholder: "Whole year",
+		options: (v) => terms.value.filter((t) => t.academicYearId === v.academicYearId).map((t) => ({ value: t.id, label: t.name })),
+		disabled: (v) => !v.academicYearId,
+		help: (v) => (v.academicYearId ? undefined : "Pick an Academic Year first."),
 	},
-	{ key: "components", label: "Fee Components", type: "custom", required: true, validate: validComponents },
+	{ key: "items", label: "Fees", type: "custom", required: true, validate: validItems },
 ];
 
-const label = (r: { program: string; academic_year: string }) => `${r.program} · ${r.academic_year}`;
-
-const listOf = (values: Values) => (values.components as Component[]) ?? [];
-const money = (n: number | string) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+const label = (r: FeeStructure) => `${r.class.name} · ${r.academicYear.name}${r.academicTerm ? ` · ${r.academicTerm.name}` : ""}`;
+const payloadItems = (v: Values) => itemsOf(v).map((c) => ({ feeCategoryId: c.feeCategoryId, amount: toPaise(c.amount) }));
+const formTotal = (v: Values) => itemsOf(v).reduce((n, c) => n + toPaise(c.amount || 0), 0);
+const setItem = (values: Values, i: number, patch: Partial<Item>) => ({
+	items: itemsOf(values).map((x, idx) => (idx === i ? { ...x, ...patch } : x)),
+});
 </script>
 
 <template>
 	<ResourcePage
 		title="Fee Structures"
 		singular="Fee Structure"
-		description="What each class pays for an academic year, split into fee components"
+		description="What each class pays for a year or term. Invoices are generated from these on the Fees page."
 		:rows="rows"
-		:row-key="(r) => r.name"
+		:row-key="(r) => r.id"
 		:row-label="label"
 		search-placeholder="Search fee structures..."
 		:search-value="label"
 		empty-label="No fee structures yet."
 		:columns="[
-			{ key: 'program', label: 'Class', sortable: true, value: (r) => r.program },
-			{ key: 'academic_year', label: 'Academic Year', sortable: true, value: (r) => r.academic_year },
-			{ key: 'academic_term', label: 'Term', value: (r) => r.academic_term || '-' },
-			{ key: 'total_amount', label: 'Total', sortable: true, align: 'right', value: (r) => r.total_amount },
+			{ key: 'class', label: 'Class', sortable: true, value: (r) => r.class.name },
+			{ key: 'academicYear', label: 'Academic Year', sortable: true, value: (r) => r.academicYear.name },
+			{ key: 'academicTerm', label: 'Term', value: (r) => r.academicTerm?.name ?? 'Whole year' },
+			{ key: 'items', label: 'Fees', value: (r) => r.items.map((i) => i.feeCategory.name).join(', ') },
+			{ key: 'total', label: 'Total', sortable: true, align: 'right', value: (r) => r.total },
+			{ key: 'invoiceCount', label: 'Invoices', align: 'right', value: (r) => r.invoiceCount },
 		]"
 		:fields="fields()"
-		:empty-values="(): Values => ({ program: '', academic_year: '', academic_term: '', components: [blank()] })"
-		:on-change-field="(key, next) => (key === 'academic_year' ? { ...next, academic_term: '' } : next)"
+		:empty-values="(): Values => ({ classId: '', academicYearId: '', academicTermId: '', items: [blank()] })"
+		:on-change-field="(key, next) => (key === 'academicYearId' ? { ...next, academicTermId: '' } : next)"
 		:reload="load"
 		:on-create="
 			(v) =>
-				api.createFeeStructure({
-					program: v.program as string,
-					academic_year: v.academic_year as string,
-					academic_term: (v.academic_term as string) || undefined,
-					components: listOf(v).map((c) => ({ fees_category: c.fees_category, amount: Number(c.amount) })),
+				api.feeStructures.create({
+					classId: v.classId as string,
+					academicYearId: v.academicYearId as string,
+					academicTermId: (v.academicTermId as string) || null,
+					items: payloadItems(v),
 				})
 		"
 		:load-for-edit="
-			async (r) => {
-				const rec = await api.getRecord('fee_structure', r.name);
-				return {
-					program: r.program,
-					academic_year: r.academic_year,
-					academic_term: rec.academic_term as string,
-					components: rec.components as Component[],
-				};
-			}
+			async (r) => ({
+				classId: r.classId,
+				academicYearId: r.academicYearId,
+				academicTermId: r.academicTermId ?? '',
+				items: r.items.map((i) => ({ feeCategoryId: i.feeCategoryId, amount: toRupees(i.amount) })),
+			})
 		"
-		:on-update="(r, v) => api.updateRecord('fee_structure', r.name, { academic_term: v.academic_term, components: v.components })"
-		:on-delete="(list) => api.deleteRecords('fee_structure', list.map((r) => r.name))"
+		:on-update="(r, v) => api.feeStructures.update(r.id, { academicTermId: (v.academicTermId as string) || null, items: payloadItems(v) })"
+		:on-delete="(list) => deleteEach(list, label, (r) => api.feeStructures.remove(r.id))"
 	>
-		<template #cell-total_amount="{ row }">{{ money(row.total_amount) }}</template>
-		<template #field-components="{ values, set, error }">
+		<template #cell-total="{ row }">{{ money(row.total) }}</template>
+		<template #field-items="{ values, set, error }">
 			<div class="flex flex-col gap-2">
-				<div v-for="(c, i) in listOf(values)" :key="i" class="flex gap-2">
+				<div v-for="(c, i) in itemsOf(values)" :key="i" class="flex gap-2">
 					<select
-						aria-label="Fee Category"
+						aria-label="Fee category"
 						:class="['min-w-0 flex-1', inputClass]"
-						:value="c.fees_category"
-						@change="set({ components: listOf(values).map((x, idx) => (idx === i ? { ...x, fees_category: ($event.target as HTMLSelectElement).value } : x)) })"
+						:value="c.feeCategoryId"
+						@change="set(setItem(values, i, { feeCategoryId: ($event.target as HTMLSelectElement).value }))"
 					>
-						<option value="">Select Fee Category...</option>
-						<option v-for="fc in categories" :key="fc.name" :value="fc.name">{{ fc.category_name }}</option>
+						<option value="">Select fee category...</option>
+						<option v-for="fc in categories" :key="fc.id" :value="fc.id">{{ fc.name }}</option>
 					</select>
 					<input
-						aria-label="Amount"
+						aria-label="Amount in rupees"
 						type="number"
 						min="0"
-						placeholder="Amount"
-						:class="['w-32', inputClass]"
+						step="0.01"
+						placeholder="Amount (₹)"
+						:class="['w-36', inputClass]"
 						:value="c.amount"
-						@input="set({ components: listOf(values).map((x, idx) => (idx === i ? { ...x, amount: ($event.target as HTMLInputElement).value } : x)) })"
+						@input="set(setItem(values, i, { amount: ($event.target as HTMLInputElement).value }))"
 					/>
 					<button
-						v-if="listOf(values).length > 1"
+						v-if="itemsOf(values).length > 1"
 						type="button"
 						class="rounded-full border border-black/15 px-3 text-xs font-medium text-danger hover:bg-danger/5"
-						@click="set({ components: listOf(values).filter((_, idx) => idx !== i) })"
+						@click="set({ items: itemsOf(values).filter((_, idx) => idx !== i) })"
 					>
 						Remove
 					</button>
 				</div>
-				<button
-					type="button"
-					class="w-fit rounded-full border border-black/15 px-3.5 py-1 text-xs font-medium text-accent hover:bg-mint"
-					@click="set({ components: [...listOf(values), blank()] })"
-				>
-					+ Add component
-				</button>
+				<div class="flex items-center justify-between">
+					<button
+						type="button"
+						class="w-fit rounded-full border border-black/15 px-3.5 py-1 text-xs font-medium text-accent hover:bg-mint"
+						@click="set({ items: [...itemsOf(values), blank()] })"
+					>
+						+ Add fee
+					</button>
+					<span class="text-sm font-medium">Total {{ money(formTotal(values)) }}</span>
+				</div>
+				<p class="text-[12px] text-black/50">Changes don't affect invoices already issued. A structure with invoices can't be deleted.</p>
 				<p v-if="error" role="alert" class="text-[12px] font-medium text-danger">{{ error }}</p>
 			</div>
 		</template>

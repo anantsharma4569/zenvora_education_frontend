@@ -1,26 +1,26 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { api } from "@/lib/api";
+import { api, deleteEach } from "@/lib/api";
 import { useSession } from "@/stores/session";
 import { useList } from "@/lib/useList";
 import type { FieldDef, Values } from "@/lib/resource";
-import type { CourseRow } from "@/lib/types";
+import type { Subject } from "@/lib/types";
 import PageHeader from "@/components/PageHeader.vue";
 import ErrorState from "@/components/ErrorState.vue";
 import DataTable from "@/components/DataTable.vue";
 import ResourcePage from "@/components/ResourcePage.vue";
 
 const { role } = storeToRefs(useSession());
-const courses = ref<CourseRow[]>([]);
+const subjects = ref<Subject[]>([]);
 const error = ref<string | null>(null);
-const { rows: departments, load: loadDepartments } = useList(api.listDepartments, false);
+const { rows: departments, load: loadDepartments } = useList(() => api.departments.list(), false);
 
 const load = () => {
 	error.value = null;
-	return api
-		.listCourses()
-		.then((v) => (courses.value = v))
+	return api.subjects
+		.list()
+		.then((v) => (subjects.value = v))
 		.catch((err) => (error.value = err.message));
 };
 
@@ -28,75 +28,66 @@ onMounted(load);
 watch(role, (r) => r === "admin" && loadDepartments(), { immediate: true });
 
 const columns = [
-	{ key: "course_name", label: "Course", sortable: true, value: (c: CourseRow) => c.course_name },
-	{ key: "department", label: "Department", sortable: true, value: (c: CourseRow) => c.department || "-" },
-	{ key: "description", label: "Description", value: (c: CourseRow) => c.description || "-" },
+	{ key: "name", label: "Subject", sortable: true, value: (c: Subject) => c.name },
+	{ key: "department", label: "Department", sortable: true, value: (c: Subject) => c.department?.name ?? "-" },
+	{ key: "description", label: "Description", value: (c: Subject) => c.description || "-" },
 ];
 
 const fields = (): FieldDef[] => [
-	{ key: "course_name", label: "Course Name", type: "text", required: true, placeholder: "e.g. Mathematics", full: true },
+	{ key: "name", label: "Subject Name", type: "text", required: true, placeholder: "e.g. Mathematics", full: true },
 	{
-		key: "department",
+		key: "departmentId",
 		label: "Department",
 		type: "select",
-		options: departments.value.map((d) => ({ value: d.name, label: d.department_name })),
+		placeholder: "No department",
+		options: departments.value.map((d) => ({ value: d.id, label: d.name })),
 	},
-	{ key: "description", label: "Description", type: "textarea", placeholder: "What this course covers" },
+	{ key: "description", label: "Description", type: "textarea", placeholder: "What this subject covers" },
 ];
+
+const values = (v: Values) => ({
+	name: v.name as string,
+	departmentId: (v.departmentId as string) || null,
+	description: (v.description as string).trim() || null,
+});
 </script>
 
 <template>
 	<div>
 		<template v-if="error">
-			<PageHeader title="Courses" subtitle="Subjects offered across programs" />
+			<PageHeader title="Subjects" subtitle="Subjects taught across classes" />
 			<ErrorState :message="error" />
 		</template>
 		<template v-else-if="role !== 'admin'">
-			<PageHeader title="Courses" subtitle="Subjects offered across programs" />
+			<PageHeader title="Subjects" subtitle="Subjects taught across classes" />
 			<DataTable
-				:rows="courses"
-				:row-key="(c) => c.name"
-				search-placeholder="Search courses..."
-				:search-value="(c) => c.course_name"
-				empty-label="No courses yet."
+				:rows="subjects"
+				:row-key="(c) => c.id"
+				search-placeholder="Search subjects..."
+				:search-value="(c) => c.name"
+				empty-label="No subjects yet."
 				:columns="columns"
 			/>
 		</template>
 		<ResourcePage
 			v-else
-			title="Courses"
-			singular="Course"
-			description="Subjects offered across programs"
-			:rows="courses"
-			:row-key="(c) => c.name"
-			:row-label="(c) => c.course_name"
-			search-placeholder="Search courses..."
-			:search-value="(c) => c.course_name"
-			empty-label="No courses yet."
+			title="Subjects"
+			singular="Subject"
+			description="Subjects taught across classes"
+			:rows="subjects"
+			:row-key="(c) => c.id"
+			:row-label="(c) => c.name"
+			search-placeholder="Search subjects..."
+			:search-value="(c) => c.name"
+			empty-label="No subjects yet."
 			:columns="columns"
 			:fields="fields()"
-			:empty-values="(): Values => ({ course_name: '', department: '', description: '' })"
+			:empty-values="(): Values => ({ name: '', departmentId: '', description: '' })"
 			:reload="load"
-			:on-create="
-				(v) =>
-					api.createCourse({
-						course_name: v.course_name as string,
-						department: (v.department as string) || undefined,
-						description: (v.description as string) || undefined,
-					})
-			"
-			:load-for-edit="
-				async (c) => {
-					const rec = await api.getRecord('course', c.name);
-					return {
-						course_name: rec.course_name as string,
-						department: rec.department as string,
-						description: rec.description as string,
-					};
-				}
-			"
-			:on-update="(c, v) => api.updateRecord('course', c.name, v)"
-			:on-delete="(list) => api.deleteRecords('course', list.map((c) => c.name))"
+			:on-create="(v) => api.subjects.create(values(v))"
+			:load-for-edit="async (c) => ({ name: c.name, departmentId: c.departmentId ?? '', description: c.description ?? '' })"
+			:on-update="(c, v) => api.subjects.update(c.id, values(v))"
+			:on-delete="(list) => deleteEach(list, (c) => c.name, (c) => api.subjects.remove(c.id))"
 		/>
 	</div>
 </template>

@@ -1,59 +1,55 @@
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { api } from "@/lib/api";
-import type { Role } from "@/lib/types";
+import type { Me, Role, SchoolProfile, SchoolRole } from "@/lib/types";
 
-const STORAGE_KEY = "zenvora.role.override";
+/** The app's four views, from the member's role in this school. */
+export const ROLE_VIEW: Record<SchoolRole, Role> = {
+	SCHOOL_ADMIN: "admin",
+	TEACHER: "teacher",
+	ACCOUNTANT: "accounts",
+	STUDENT: "student",
+	PARENT: "student",
+};
 
 /**
- * The backend (get_dashboard) is the source of truth for role - it derives it from
- * frappe.session.user server-side. The local override is only a fallback for when
- * the backend can't be reached.
+ * Who is signed in, to which school, and in what role. The API is the source of truth: the
+ * role comes from the member's record in this school, never from the browser.
  */
 export const useSession = defineStore("session", () => {
+	const me = ref<Me | null>(null);
+	const school = ref<SchoolProfile | null>(null);
+	/** null until the first check finishes. */
 	const authenticated = ref<boolean | null>(null);
-	const role = ref<Role>("admin");
-	const roleLoading = ref(true);
 
-	async function check(): Promise<boolean> {
+	const role = computed<Role>(() => (me.value?.currentRole ? ROLE_VIEW[me.value.currentRole] : "student"));
+	const impersonatedBy = computed(() => me.value?.impersonatedBy ?? null);
+
+	async function load(): Promise<boolean> {
 		try {
-			authenticated.value = (await api.getSession()).authenticated;
+			const user = await api.auth.me();
+			if (!user.currentSchoolId) throw new Error("Not signed in to a school");
+			me.value = user;
+			school.value = await api.profile().catch(() => null);
+			authenticated.value = true;
 		} catch {
+			me.value = null;
+			school.value = null;
 			authenticated.value = false;
 		}
 		return authenticated.value;
 	}
 
-	async function loadRole() {
-		roleLoading.value = true;
-		try {
-			role.value = (await api.getDashboard()).role;
-		} catch {
-			try {
-				const stored = localStorage.getItem(STORAGE_KEY) as Role | null;
-				if (stored) role.value = stored;
-			} catch {
-				// localStorage unavailable, keep default
-			}
-		} finally {
-			roleLoading.value = false;
-		}
-	}
-
-	function setRole(next: Role) {
-		role.value = next;
-		try {
-			localStorage.setItem(STORAGE_KEY, next);
-		} catch {
-			// ignore
-		}
+	async function logout() {
+		await api.auth.logout().catch(() => undefined);
+		reset();
 	}
 
 	function reset() {
+		me.value = null;
+		school.value = null;
 		authenticated.value = null;
-		role.value = "admin";
-		roleLoading.value = true;
 	}
 
-	return { authenticated, role, roleLoading, check, loadRole, setRole, reset };
+	return { me, school, authenticated, role, impersonatedBy, load, logout, reset };
 });

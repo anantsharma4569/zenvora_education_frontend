@@ -2,7 +2,6 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { api } from "@/lib/api";
 import { useSession } from "@/stores/session";
 import type { Role } from "@/lib/types";
 
@@ -16,7 +15,7 @@ const NAV_ITEMS: NavItem[] = [
 	{ href: "/dashboard", label: "Dashboard", roles: ["admin", "teacher", "accounts", "student"] },
 	{ href: "/students", label: "Students", roles: ["admin", "teacher", "accounts"] },
 	{ href: "/staff", label: "Staff", roles: ["admin"] },
-	{ href: "/courses", label: "Courses", roles: ["admin", "teacher", "student"] },
+	{ href: "/courses", label: "Subjects", roles: ["admin", "teacher"] },
 	{ href: "/attendance", label: "Attendance", roles: ["admin", "teacher", "student"] },
 	{ href: "/timetable", label: "Time Table", roles: ["admin", "teacher", "student"] },
 	{ href: "/exams", label: "Exams & Results", roles: ["admin", "teacher", "student"] },
@@ -27,7 +26,8 @@ const NAV_ITEMS: NavItem[] = [
 const ROLE_LABEL: Record<Role, string> = { admin: "Admin", teacher: "Teacher", accounts: "Accounts", student: "Student" };
 
 const session = useSession();
-const { role } = storeToRefs(session);
+const { role, me, school } = storeToRefs(session);
+const schoolName = computed(() => school.value?.name ?? "Zenvora Education");
 const route = useRoute();
 const router = useRouter();
 
@@ -35,8 +35,7 @@ const items = computed(() => NAV_ITEMS.filter((item) => item.roles.includes(role
 const isActive = (href: string) => route.path === href || route.path.startsWith(href + "/");
 
 const logout = async () => {
-	await api.logout().catch(() => undefined);
-	session.reset();
+	await session.logout();
 	router.replace("/login");
 };
 </script>
@@ -47,7 +46,7 @@ const logout = async () => {
 		<div class="flex items-center gap-2.5 px-2">
 			<span class="h-[26px] w-[26px] shrink-0 rounded-full bg-accent" />
 			<span>
-				<span class="block whitespace-nowrap text-sm font-semibold tracking-[-0.01em]">Zenvora Education</span>
+				<span class="block whitespace-nowrap text-sm font-semibold tracking-[-0.01em]">{{ schoolName }}</span>
 				<span class="block text-[11px] text-black/45">{{ ROLE_LABEL[role] }} view</span>
 			</span>
 		</div>
@@ -62,6 +61,9 @@ const logout = async () => {
 				{{ item.label }}
 			</RouterLink>
 		</nav>
+		<button class="self-start rounded-full border border-black/[0.15] px-3 py-1 text-xs font-medium text-black/70" @click="logout">
+			Log out
+		</button>
 	</aside>
 
 	<!-- Wide / desktop: fixed-width left sidebar. -->
@@ -70,7 +72,7 @@ const logout = async () => {
 			<div class="flex items-center gap-2.5 px-2">
 				<span class="h-[26px] w-[26px] shrink-0 rounded-full bg-accent" />
 				<span>
-					<span class="block whitespace-nowrap text-sm font-semibold tracking-[-0.01em]">Zenvora Education</span>
+					<span class="block whitespace-nowrap text-sm font-semibold tracking-[-0.01em]">{{ schoolName }}</span>
 					<span class="block text-[11px] text-black/45">{{ ROLE_LABEL[role] }} view</span>
 				</span>
 			</div>
@@ -87,16 +89,11 @@ const logout = async () => {
 			</nav>
 		</div>
 
-		<!-- Demo-only role switcher: real role comes from the Frappe session server-side. -->
 		<div class="border-t border-line pt-3.5">
-			<label class="block px-2.5 pb-1.5 text-[10px] uppercase tracking-[0.08em] text-black/40">Preview as (demo)</label>
-			<select
-				class="mx-1 w-[calc(100%-8px)] rounded-[7px] border border-black/[0.12] bg-transparent px-2.5 py-1.5 text-[13px]"
-				:value="role"
-				@change="session.setRole(($event.target as HTMLSelectElement).value as Role)"
-			>
-				<option v-for="(label, value) in ROLE_LABEL" :key="value" :value="value">{{ label }}</option>
-			</select>
+			<div class="px-2.5">
+				<span class="block truncate text-[13px] font-medium">{{ me?.name }}</span>
+				<span class="block truncate text-[11px] text-black/45">{{ me?.email }}</span>
+			</div>
 			<button
 				class="mx-1 mt-2.5 w-[calc(100%-8px)] rounded-full border border-black/[0.15] px-2.5 py-2 text-[13px] font-medium text-black/70 hover:bg-mint"
 				@click="logout"

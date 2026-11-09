@@ -1,110 +1,101 @@
 <script setup lang="ts">
-import { api } from "@/lib/api";
+import { api, deleteEach } from "@/lib/api";
 import { useList } from "@/lib/useList";
 import type { FieldDef, Values } from "@/lib/resource";
 import ResourcePage from "@/components/ResourcePage.vue";
 
-const { rows, load } = useList(api.listStudentGroups);
-const { rows: programs } = useList(api.listPrograms);
-const { rows: years } = useList(api.listAcademicYears);
-const { rows: terms } = useList(() => api.listAcademicTerms());
+const { rows, load } = useList(() => api.sections.list());
+const { rows: classes } = useList(() => api.classes.list());
+const { rows: years } = useList(() => api.academicYears.list());
+const { rows: terms } = useList(() => api.academicTerms.list());
 
 const fields = (): FieldDef[] => [
-	{ key: "student_group_name", label: "Section Name", type: "text", required: true, placeholder: "e.g. Grade 10 - A", full: true },
+	{ key: "name", label: "Section Name", type: "text", required: true, placeholder: "e.g. Grade 10 - A", full: true },
 	{
-		key: "program",
+		key: "classId",
 		label: "Class",
 		type: "select",
 		required: true,
 		lockedOnEdit: true,
-		options: programs.value.map((p) => ({ value: p.name, label: p.program_name })),
+		options: classes.value.map((c) => ({ value: c.id, label: c.name })),
 	},
 	{
-		key: "academic_year",
+		key: "academicYearId",
 		label: "Academic Year",
 		type: "select",
 		required: true,
 		lockedOnEdit: true,
-		options: years.value.map((y) => ({ value: y.name, label: y.name })),
+		options: years.value.map((y) => ({ value: y.id, label: y.name })),
 	},
 	{
-		key: "academic_term",
+		key: "academicTermId",
 		label: "Academic Term",
 		type: "select",
-		options: (v) =>
-			terms.value.filter((t) => t.academic_year === v.academic_year).map((t) => ({ value: t.name, label: t.term_name })),
-		help: "Pick an Academic Year first.",
+		placeholder: "Whole year",
+		options: (v) => terms.value.filter((t) => t.academicYearId === v.academicYearId).map((t) => ({ value: t.id, label: t.name })),
+		disabled: (v) => !v.academicYearId,
+		help: (v) => (v.academicYearId ? "Only if the section runs for one term." : "Pick an Academic Year first."),
 	},
-	{ key: "max_strength", label: "Maximum Students", type: "number", placeholder: "0 = no limit" },
-	{ key: "disabled", label: "Disabled", type: "checkbox", placeholder: "This section is disabled", hidden: (_v, editing) => !editing },
+	{ key: "maxStrength", label: "Maximum Students", type: "number", placeholder: "Empty = no limit" },
+	{ key: "isActive", label: "Active", type: "checkbox", placeholder: "Section is in use", hidden: (_v, editing) => !editing },
 ];
+
+const maxOf = (v: Values) => (v.maxStrength ? Number(v.maxStrength) : null);
 </script>
 
 <template>
 	<ResourcePage
-		title="Student Groups"
+		title="Sections"
 		singular="Section"
-		description="Class sections, e.g. Grade 10 - A. Students are placed into a section."
+		description="Class sections, e.g. Grade 10 - A. Students are placed into a section for the year."
 		:rows="rows"
-		:row-key="(r) => r.name"
-		:row-label="(r) => r.student_group_name"
+		:row-key="(r) => r.id"
+		:row-label="(r) => r.name"
 		search-placeholder="Search sections..."
-		:search-value="(r) => r.student_group_name"
+		:search-value="(r) => `${r.name} ${r.class.name}`"
 		empty-label="No sections yet."
 		:columns="[
-			{ key: 'student_group_name', label: 'Section', sortable: true, value: (r) => r.student_group_name },
-			{ key: 'program', label: 'Class', sortable: true, value: (r) => r.program },
-			{ key: 'academic_year', label: 'Academic Year', value: (r) => r.academic_year },
-			{ key: 'academic_term', label: 'Term', value: (r) => r.academic_term || '-' },
-			{ key: 'student_count', label: 'Students', sortable: true, align: 'right', value: (r) => r.student_count ?? 0 },
-			{ key: 'max_strength', label: 'Max', align: 'right', value: (r) => r.max_strength || '-' },
-			{ key: 'disabled', label: 'Status', value: (r) => (r.disabled ? 'Disabled' : 'Active') },
+			{ key: 'name', label: 'Section', sortable: true, value: (r) => r.name },
+			{ key: 'class', label: 'Class', sortable: true, value: (r) => r.class.name },
+			{ key: 'academicYear', label: 'Academic Year', value: (r) => r.academicYear.name },
+			{ key: 'academicTerm', label: 'Term', value: (r) => r.academicTerm?.name ?? 'Whole year' },
+			{ key: 'studentCount', label: 'Students', sortable: true, align: 'right', value: (r) => r.studentCount },
+			{ key: 'maxStrength', label: 'Max', align: 'right', value: (r) => r.maxStrength || '-' },
+			{ key: 'isActive', label: 'Status', value: (r) => (r.isActive ? 'Active' : 'Inactive') },
 		]"
 		:fields="fields()"
-		:empty-values="
-			(): Values => ({
-				student_group_name: '',
-				program: '',
-				academic_year: '',
-				academic_term: '',
-				max_strength: '',
-				disabled: false,
-			})
-		"
-		:on-change-field="(key, next) => (key === 'academic_year' ? { ...next, academic_term: '' } : next)"
+		:empty-values="(): Values => ({ name: '', classId: '', academicYearId: '', academicTermId: '', maxStrength: '', isActive: true })"
+		:on-change-field="(key, next) => (key === 'academicYearId' ? { ...next, academicTermId: '' } : next)"
 		:reload="load"
 		:on-create="
 			(v) =>
-				api.createStudentGroup({
-					student_group_name: v.student_group_name as string,
-					program: v.program as string,
-					academic_year: v.academic_year as string,
-					academic_term: (v.academic_term as string) || undefined,
-					max_strength: v.max_strength ? Number(v.max_strength) : undefined,
+				api.sections.create({
+					name: v.name as string,
+					classId: v.classId as string,
+					academicYearId: v.academicYearId as string,
+					academicTermId: (v.academicTermId as string) || null,
+					maxStrength: maxOf(v),
 				})
 		"
 		:load-for-edit="
-			async (r) => {
-				const rec = await api.getRecord('student_group', r.name);
-				return {
-					student_group_name: rec.student_group_name as string,
-					program: r.program,
-					academic_year: r.academic_year,
-					academic_term: rec.academic_term as string,
-					max_strength: rec.max_strength === '0' ? '' : (rec.max_strength as string),
-					disabled: rec.disabled === '1',
-				};
-			}
+			async (r) => ({
+				name: r.name,
+				classId: r.classId,
+				academicYearId: r.academicYearId,
+				academicTermId: r.academicTermId ?? '',
+				maxStrength: r.maxStrength ? String(r.maxStrength) : '',
+				isActive: r.isActive,
+			})
 		"
 		:on-update="
 			(r, v) =>
-				api.updateRecord('student_group', r.name, {
-					student_group_name: v.student_group_name,
-					academic_term: v.academic_term,
-					max_strength: v.max_strength || 0,
-					disabled: v.disabled ? 1 : 0,
+				api.sections.update(r.id, {
+					name: v.name as string,
+					academicTermId: (v.academicTermId as string) || null,
+					maxStrength: maxOf(v),
+					isActive: v.isActive === true,
 				})
 		"
-		:on-delete="(list) => api.deleteRecords('student_group', list.map((r) => r.name))"
+		:on-delete="(list) => deleteEach(list, (r) => r.name, (r) => api.sections.remove(r.id))"
 	/>
 </template>

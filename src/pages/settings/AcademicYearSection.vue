@@ -1,21 +1,22 @@
 <script setup lang="ts">
-import { api } from "@/lib/api";
+import { api, deleteEach } from "@/lib/api";
 import { useList } from "@/lib/useList";
+import { formatDate } from "@/lib/format";
 import type { FieldDef, Values } from "@/lib/resource";
 import ResourcePage from "@/components/ResourcePage.vue";
 
-const { rows, load } = useList(api.listAcademicYears);
+const { rows, load } = useList(() => api.academicYears.list());
 
 const endAfterStart = (v: Values) =>
-	v.year_start_date && v.year_end_date && (v.year_end_date as string) <= (v.year_start_date as string)
-		? "End date must be after the start date"
-		: null;
+	v.startDate && v.endDate && (v.endDate as string) <= (v.startDate as string) ? "End date must be after the start date" : null;
 
 const fields: FieldDef[] = [
-	{ key: "academic_year_name", label: "Academic Year Name", type: "text", required: true, placeholder: "e.g. 2026-27", full: true },
-	{ key: "year_start_date", label: "Start Date", type: "date", required: true },
-	{ key: "year_end_date", label: "End Date", type: "date", required: true, validate: endAfterStart },
+	{ key: "name", label: "Academic Year Name", type: "text", required: true, placeholder: "e.g. 2026-27", full: true },
+	{ key: "startDate", label: "Start Date", type: "date", required: true },
+	{ key: "endDate", label: "End Date", type: "date", required: true, validate: endAfterStart },
 ];
+
+const values = (v: Values) => ({ name: v.name as string, startDate: v.startDate as string, endDate: v.endDate as string });
 </script>
 
 <template>
@@ -24,38 +25,25 @@ const fields: FieldDef[] = [
 		singular="Academic Year"
 		description="A school session, e.g. 2026-27 (April to March)"
 		:rows="rows"
-		:row-key="(r) => r.name"
+		:row-key="(r) => r.id"
 		:row-label="(r) => r.name"
 		search-placeholder="Search academic years..."
 		:search-value="(r) => r.name"
 		empty-label="No academic years yet."
 		:columns="[
 			{ key: 'name', label: 'Academic Year', sortable: true, value: (r) => r.name },
-			{ key: 'year_start_date', label: 'Starts', sortable: true, value: (r) => r.year_start_date || '' },
-			{ key: 'year_end_date', label: 'Ends', sortable: true, value: (r) => r.year_end_date || '' },
+			{ key: 'startDate', label: 'Starts', sortable: true, value: (r) => r.startDate },
+			{ key: 'endDate', label: 'Ends', sortable: true, value: (r) => r.endDate },
 		]"
 		:fields="fields"
-		:empty-values="(): Values => ({ academic_year_name: '', year_start_date: '', year_end_date: '' })"
+		:empty-values="(): Values => ({ name: '', startDate: '', endDate: '' })"
 		:reload="load"
-		:on-create="
-			(v) =>
-				api.createAcademicYear({
-					academic_year_name: v.academic_year_name as string,
-					year_start_date: v.year_start_date as string,
-					year_end_date: v.year_end_date as string,
-				})
-		"
-		:load-for-edit="
-			async (r) => {
-				const rec = await api.getRecord('academic_year', r.name);
-				return {
-					academic_year_name: rec.academic_year_name as string,
-					year_start_date: rec.year_start_date as string,
-					year_end_date: rec.year_end_date as string,
-				};
-			}
-		"
-		:on-update="(r, v) => api.updateRecord('academic_year', r.name, v)"
-		:on-delete="(list) => api.deleteRecords('academic_year', list.map((r) => r.name))"
-	/>
+		:on-create="(v) => api.academicYears.create(values(v))"
+		:load-for-edit="async (r) => ({ name: r.name, startDate: r.startDate, endDate: r.endDate })"
+		:on-update="(r, v) => api.academicYears.update(r.id, values(v))"
+		:on-delete="(list) => deleteEach(list, (r) => r.name, (r) => api.academicYears.remove(r.id))"
+	>
+		<template #cell-startDate="{ row }">{{ formatDate(row.startDate) }}</template>
+		<template #cell-endDate="{ row }">{{ formatDate(row.endDate) }}</template>
+	</ResourcePage>
 </template>

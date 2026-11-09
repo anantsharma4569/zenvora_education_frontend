@@ -1,328 +1,304 @@
-// Empty = same origin (Vite proxies /api in dev; the built app is served next to Frappe).
-const FRAPPE_URL = (import.meta.env.VITE_FRAPPE_URL as string | undefined) || "";
-
-function extractErrorMessage(status: number, body: string): { message: string; sessionExpired: boolean } {
-	try {
-		const parsed = JSON.parse(body);
-		// Frappe sets this explicit flag when the request had no valid session. Separately,
-		// a request whose cookie no longer resolves to a real user (e.g. Redis/session cache
-		// cleared by a backend restart) fails whitelisting entirely: status 403, exc_type
-		// PermissionError, no session_expired flag, and often a *second*, more useful message
-		// buried behind a generic "User None not found" one - both cases mean the same thing:
-		// "please log in again", not "here's what was wrong with the form".
-		if (parsed.session_expired || (status === 403 && parsed.exc_type === "PermissionError")) {
-			return { message: "Your session has expired. Please log in again.", sessionExpired: true };
-		}
-		// _server_messages (msgprint-raised errors, e.g. our own frappe.throw calls) is the
-		// most reliable source - check it first. `message` alone can be a stray leftover from
-		// unrelated request handling (e.g. Frappe sets a login-status "message" during session
-		// setup that has nothing to do with this request) and must not take priority when a
-		// real error is also present.
-		if (parsed._server_messages) {
-			// Frappe queues informational toasts ("Document renamed...", alert: 1) in the same
-			// list as real errors. Skip those, and prefer the last remaining message - the one
-			// actually raised - over earlier generic ones.
-			const parsedMessages = (JSON.parse(parsed._server_messages) as string[]).map((m) => JSON.parse(m));
-			const errors = parsedMessages.filter((m) => m.message && !m.alert);
-			const chosen = errors.length ? errors[errors.length - 1] : parsedMessages[0];
-			if (chosen?.message) return { message: chosen.message, sessionExpired: false };
-		}
-		if (typeof parsed.message === "string") return { message: parsed.message, sessionExpired: false };
-		if (parsed.exception) {
-			return { message: String(parsed.exception).split("\n").pop() || parsed.exception, sessionExpired: false };
-		}
-	} catch {
-		// fall through to raw body
-	}
-	return { message: `Request failed (${status})`, sessionExpired: false };
-}
-
-// Frappe rejects cookie-session POSTs that lack the session's CSRF token once one exists.
-let csrfToken: string | null = null;
-
-async function refreshCsrfToken(): Promise<string | null> {
-	try {
-		const url = new URL(`${FRAPPE_URL}/api/method/zenvora_education.api.auth.get_session`, window.location.origin);
-		const res = await fetch(url.toString(), { credentials: "include" });
-		csrfToken = ((await res.json()).message?.csrf_token as string | null | undefined) ?? null;
-	} catch {
-		csrfToken = null;
-	}
-	return csrfToken;
-}
-
-async function callMethod<T>(
-	method: string,
-	params: Record<string, unknown> = {},
-	options: { method?: "GET" | "POST" } = {},
-	retried = false,
-): Promise<T> {
-	const httpMethod = options.method || "GET";
-	const url = new URL(`${FRAPPE_URL}/api/method/${method}`, window.location.origin);
-
-	const init: RequestInit = {
-		method: httpMethod,
-		credentials: "include",
-		headers: { "Content-Type": "application/json" },
-	};
-
-	if (httpMethod === "GET") {
-		for (const [key, value] of Object.entries(params)) {
-			if (value !== undefined && value !== null) {
-				url.searchParams.set(key, String(value));
-			}
-		}
-	} else {
-		init.body = JSON.stringify(params);
-	}
-
-	if (httpMethod === "POST" && method !== "login" && method !== "logout") {
-		if (!csrfToken) await refreshCsrfToken();
-		if (csrfToken) (init.headers as Record<string, string>)["X-Frappe-CSRF-Token"] = csrfToken;
-	}
-
-	const response = await fetch(url.toString(), init);
-	if (!response.ok) {
-		const body = await response.text();
-		// A stale token (new login, session rotated): fetch a fresh one and retry once.
-		if (httpMethod === "POST" && !retried && response.status === 400 && body.includes("CSRFTokenError")) {
-			await refreshCsrfToken();
-			return callMethod<T>(method, params, options, true);
-		}
-		const { message, sessionExpired } = extractErrorMessage(response.status, body);
-		if (sessionExpired && window.location.pathname !== "/login") {
-			window.location.href = "/login";
-		}
-		throw new Error(message);
-	}
-
-	const json = await response.json();
-	return json.message as T;
-}
-
+// Client for the Zenvora API. In development Vite proxies /api to the API (vite.config.ts); in
+// production the school's site serves /api from the same origin. Sign-in uses httpOnly cookies
+// set by the API, so this file never sees a token.
 import type {
-	AcademicTermRow,
-	AcademicYearRow,
-	CompanyRow,
-	CourseRow,
-	CourseScheduleRow,
+	AcademicTerm,
+	AcademicYear,
 	DashboardData,
-	DepartmentRow,
-	DesignationRow,
-	EmployeeAttendanceRow,
-	FeeCategoryRow,
-	FeeRow,
-	FeeStructureRow,
-	InstructorRow,
-	ProgramRow,
-	ResultRow,
-	RoomRow,
-	Session,
-	StaffMember,
-	StudentAttendanceRow,
-	StudentGroupRow,
-	StudentRow,
+	Department,
+	Designation,
+	Exam,
+	FeeCategory,
+	FeeStructure,
+	Invoice,
+	InvoiceDetail,
+	InvoiceStatus,
+	MarksSheet,
+	Me,
+	PaymentMethod,
+	PersonStatus,
+	Result,
+	Room,
+	SchoolBranding,
+	SchoolClass,
+	SchoolProfile,
+	Section,
+	Slot,
+	Staff,
+	StaffAttendance,
+	StaffAttendanceStatus,
+	StaffSheet,
+	Student,
+	StudentAttendance,
+	StudentAttendanceStatus,
+	StudentSheet,
+	Subject,
 	TimetableOptions,
-	TimetableRow,
 } from "./types";
+import type { DeleteResult } from "./resource";
+
+const BASE = "/api/v1";
+
+/** An error from the API. `fields` maps form fields to messages for validation errors. */
+export class ApiError extends Error {
+	constructor(
+		message: string,
+		readonly status: number,
+		readonly code: string,
+		readonly fields: Record<string, string> = {},
+	) {
+		super(message);
+	}
+}
+
+type Query = Record<string, string | number | boolean | null | undefined>;
+
+let refreshing: Promise<boolean> | null = null;
+
+/** One refresh at a time, however many requests found the access token expired. */
+function refreshSession(): Promise<boolean> {
+	refreshing ??= fetch(`${BASE}/auth/refresh`, { method: "POST", credentials: "include" })
+		.then((r) => r.ok)
+		.catch(() => false)
+		.finally(() => setTimeout(() => (refreshing = null), 0));
+	return refreshing;
+}
+
+const AUTH_PAGES = ["/login", "/impersonate"];
+
+async function request<T>(method: string, path: string, opts: { query?: Query; body?: unknown } = {}, retried = false): Promise<T> {
+	const url = new URL(BASE + path, window.location.origin);
+	for (const [k, v] of Object.entries(opts.query ?? {})) {
+		if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
+	}
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			method,
+			credentials: "include",
+			headers: opts.body !== undefined ? { "Content-Type": "application/json" } : undefined,
+			body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+		});
+	} catch {
+		throw new ApiError("Cannot reach the server. Check your connection and try again.", 0, "NETWORK");
+	}
+	if (res.status === 204) return undefined as T;
+
+	const data = await res.json().catch(() => ({}));
+	if (res.ok) return data as T;
+
+	const code: string = data.code ?? "ERROR";
+	// An expired access token is refreshed once; any other 401 means signed out.
+	if (res.status === 401 && (code === "TOKEN_EXPIRED" || code === "UNAUTHENTICATED") && !retried && !path.startsWith("/auth/")) {
+		if (await refreshSession()) return request<T>(method, path, opts, true);
+		if (!AUTH_PAGES.includes(window.location.pathname)) {
+			window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+		}
+	}
+	const fields: Record<string, string> = data.fields ?? {};
+	// Forms show one message, so a validation error carries its field messages.
+	const detail = Object.values(fields).join(". ");
+	throw new ApiError(detail && code === "VALIDATION_FAILED" ? detail : (data.message ?? `Request failed (${res.status})`), res.status, code, fields);
+}
+
+const get = <T>(path: string, query?: Query) => request<T>("GET", path, { query });
+const post = <T>(path: string, body?: unknown) => request<T>("POST", path, { body: body ?? {} });
+const put = <T>(path: string, body: unknown) => request<T>("PUT", path, { body });
+const patch = <T>(path: string, body: unknown) => request<T>("PATCH", path, { body });
+const del = (path: string) => request<void>("DELETE", path);
+
+/**
+ * Deletes records one by one and reports each outcome, so a record still in use (409) is
+ * listed with its reason while the rest go through.
+ */
+export async function deleteEach<R>(rows: R[], label: (r: R) => string, remove: (r: R) => Promise<unknown>): Promise<DeleteResult[]> {
+	const out: DeleteResult[] = [];
+	for (const r of rows) {
+		try {
+			await remove(r);
+			out.push({ name: label(r), ok: true, message: "" });
+		} catch (e) {
+			out.push({ name: label(r), ok: false, message: (e as Error).message });
+		}
+	}
+	return out;
+}
+
+/** CRUD for the simple settings resources. */
+function resource<Row, Create, Update = Partial<Create>>(path: string) {
+	return {
+		list: (query?: Query) => get<Row[]>(path, query),
+		create: (body: Create) => post<Row>(path, body),
+		update: (id: string, body: Update) => patch<Row>(`${path}/${id}`, body),
+		remove: (id: string) => del(`${path}/${id}`),
+	};
+}
+
+export type Nullable<T> = { [K in keyof T]: T[K] | null };
 
 export const api = {
-	getSession: () => callMethod<Session>("zenvora_education.api.auth.get_session"),
-
-	login: (usr: string, pwd: string) => {
-		csrfToken = null; // new session, new token
-		return callMethod<string>("login", { usr, pwd }, { method: "POST" });
+	// ── Auth ──────────────────────────────────────────────────────────────────
+	auth: {
+		me: () => get<Me>("/auth/me"),
+		login: (email: string, password: string, schoolCode?: string) =>
+			post<{ scope: string }>("/auth/login", { email, password, schoolCode: schoolCode || undefined }),
+		logout: () => post<void>("/auth/logout"),
+		impersonate: (ticket: string) => post<{ scope: string }>("/auth/impersonate", { ticket }),
 	},
 
-	logout: () => {
-		csrfToken = null;
-		return callMethod("logout", {}, { method: "POST" });
+	// ── Public (before sign-in) ───────────────────────────────────────────────
+	site: () => get<{ portal: "STAFF" | "STUDENT"; school: SchoolBranding }>("/public/site-config"),
+	schoolByCode: (code: string) => get<SchoolBranding>(`/public/schools/${encodeURIComponent(code)}`),
+
+	// ── School ────────────────────────────────────────────────────────────────
+	profile: () => get<SchoolProfile>("/school/profile"),
+	dashboard: () => get<DashboardData>("/school/dashboard"),
+
+	departments: resource<Department, { name: string }>("/school/departments"),
+	designations: resource<Designation, { name: string; isTeaching?: boolean }>("/school/designations"),
+	academicYears: resource<AcademicYear, { name: string; startDate: string; endDate: string }>("/school/academic-years"),
+	academicTerms: resource<
+		AcademicTerm,
+		{ academicYearId: string; name: string; startDate: string; endDate: string },
+		{ name?: string; startDate?: string; endDate?: string }
+	>("/school/academic-terms"),
+	classes: resource<SchoolClass, { name: string; departmentId?: string | null }>("/school/classes"),
+	sections: resource<
+		Section,
+		{ name: string; classId: string; academicYearId: string; academicTermId?: string | null; maxStrength?: number | null },
+		{ name?: string; academicTermId?: string | null; maxStrength?: number | null; isActive?: boolean }
+	>("/school/sections"),
+	subjects: resource<Subject, { name: string; departmentId?: string | null; description?: string | null }>("/school/subjects"),
+	rooms: resource<Room, { name: string; number?: string | null; capacity?: number | null }>("/school/rooms"),
+	feeCategories: resource<FeeCategory, { name: string }>("/school/fee-categories"),
+	feeStructures: {
+		...resource<
+			FeeStructure,
+			{ classId: string; academicYearId: string; academicTermId?: string | null; items: { feeCategoryId: string; amount: number }[] },
+			{ academicTermId?: string | null; items?: { feeCategoryId: string; amount: number }[] }
+		>("/school/fee-structures"),
+		get: (id: string) => get<FeeStructure>(`/school/fee-structures/${id}`),
 	},
 
-	getDashboard: () => callMethod<DashboardData>("zenvora_education.api.dashboard.get_dashboard"),
+	staff: {
+		list: (q?: { status?: PersonStatus | "all" }) => get<Staff[]>("/school/staff", q),
+		get: (id: string) => get<Staff>(`/school/staff/${id}`),
+		create: (body: StaffInput & { login?: { password: string; role?: "SCHOOL_ADMIN" | "TEACHER" | "ACCOUNTANT" } }) =>
+			post<Staff>("/school/staff", body),
+		update: (id: string, body: Partial<StaffInput> & { status?: PersonStatus }) => patch<Staff>(`/school/staff/${id}`, body),
+		disable: (id: string) => del(`/school/staff/${id}`),
+	},
+	students: {
+		list: (q?: { classId?: string; sectionId?: string; academicYearId?: string; status?: PersonStatus | "all"; search?: string }) =>
+			get<Student[]>("/school/students", q),
+		get: (id: string) => get<Student>(`/school/students/${id}`),
+		create: (body: StudentInput & { academicYearId: string }) => post<Student>("/school/students", body),
+		update: (id: string, body: Partial<StudentInput> & { status?: PersonStatus }) => patch<Student>(`/school/students/${id}`, body),
+		disable: (id: string) => del(`/school/students/${id}`),
+	},
 
-	getEmployeeAttendance: (params?: { employee?: string; from_date?: string; to_date?: string; status?: string }) =>
-		callMethod<EmployeeAttendanceRow[]>("zenvora_education.api.attendance.get_employee_attendance", params),
+	schedule: {
+		list: (q?: { sectionId?: string; classId?: string; teacherId?: string; from?: string; to?: string }) => get<Slot[]>("/school/schedule", q),
+		window: (sectionId: string) => get<{ from: string; to: string; label: string }>(`/school/schedule/window/${sectionId}`),
+		create: (body: SlotInput) => post<Slot>("/school/schedule", body),
+		bulk: (body: Omit<SlotInput, "date"> & { startDate: string; endDate: string; days: string[] }) =>
+			post<{ created: number; skipped: { date: string; reason: string }[] }>("/school/schedule/bulk", body),
+		update: (id: string, body: Partial<SlotInput>) => patch<Slot>(`/school/schedule/${id}`, body),
+		remove: (id: string) => del(`/school/schedule/${id}`),
+	},
+	timetable: {
+		options: () => get<TimetableOptions>("/school/timetable/options"),
+		section: (sectionId: string, from: string, to: string) => get<Slot[]>("/school/timetable", { sectionId, from, to }),
+		mine: (from: string, to: string) => get<Slot[]>("/school/timetable/mine", { from, to }),
+	},
 
-	getStudentAttendance: (params?: {
-		student_group?: string;
-		date?: string;
-		status?: string;
-		from_date?: string;
-		to_date?: string;
-		program?: string;
-		student?: string;
-	}) =>
-		callMethod<StudentAttendanceRow[]>("zenvora_education.api.attendance.get_student_attendance", params),
+	attendance: {
+		students: (q?: {
+			from?: string;
+			to?: string;
+			status?: StudentAttendanceStatus;
+			classId?: string;
+			sectionId?: string;
+			studentId?: string;
+		}) => get<StudentAttendance[]>("/school/attendance/students", q),
+		studentSheet: (sectionId: string, date: string) => get<StudentSheet>("/school/attendance/students/sheet", { sectionId, date }),
+		markStudents: (sectionId: string, date: string, entries: { studentId: string; status: StudentAttendanceStatus }[]) =>
+			put<{ saved: number }>("/school/attendance/students", { sectionId, date, entries }),
+		staff: (q?: { from?: string; to?: string; status?: StaffAttendanceStatus; staffId?: string }) =>
+			get<StaffAttendance[]>("/school/attendance/staff", q),
+		staffSheet: (date: string) => get<StaffSheet>("/school/attendance/staff/sheet", { date }),
+		markStaff: (date: string, entries: { staffId: string; status: StaffAttendanceStatus }[]) =>
+			put<{ saved: number }>("/school/attendance/staff", { date, entries }),
+		mine: (q?: { from?: string; to?: string }) => get<StudentAttendance[]>("/school/attendance/mine", q),
+	},
 
-	getMyAttendance: (params?: { from_date?: string; to_date?: string }) =>
-		callMethod<StudentAttendanceRow[]>("zenvora_education.api.attendance.get_my_attendance", params),
+	exams: {
+		list: () => get<Exam[]>("/school/exams"),
+		gradeScale: () => get<{ min: number; grade: string }[]>("/school/exams/grade-scale"),
+		create: (body: ExamInput) => post<Exam>("/school/exams", body),
+		update: (id: string, body: Partial<ExamInput> & { isPublished?: boolean }) => patch<Exam>(`/school/exams/${id}`, body),
+		remove: (id: string) => del(`/school/exams/${id}`),
+		marks: (examId: string, sectionId: string, subjectId: string) => get<MarksSheet>(`/school/exams/${examId}/marks`, { sectionId, subjectId }),
+		saveMarks: (examId: string, body: { sectionId: string; subjectId: string; maxScore: number; entries: { studentId: string; score: number | null }[] }) =>
+			put<{ saved: number; cleared: number }>(`/school/exams/${examId}/marks`, body),
+	},
+	results: {
+		list: (q?: { examId?: string; classId?: string; sectionId?: string; subjectId?: string }) => get<Result[]>("/school/results", q),
+		mine: () => get<Result[]>("/school/results/mine"),
+	},
 
-	markStudentAttendance: (student_group: string, date: string, attendance: { student: string; status: string }[]) =>
-		callMethod<string[]>(
-			"zenvora_education.api.attendance.mark_student_attendance",
-			{ student_group, date, attendance },
-			{ method: "POST" },
-		),
-
-	createEmployee: (params: {
-		first_name: string;
-		gender: string;
-		date_of_birth: string;
-		department: string;
-		designation: string;
-		date_of_joining: string;
-		company: string;
-		last_name?: string;
-		personal_email?: string;
-		is_instructor?: boolean;
-		password?: string;
-	}) => callMethod("zenvora_education.api.employee.create_employee", params, { method: "POST" }),
-
-	getStaffDirectory: (params?: { company?: string; status?: "Active" | "Inactive" | "all" }) =>
-		callMethod<{ teaching_staff: StaffMember[]; non_teaching_staff: StaffMember[] }>(
-			"zenvora_education.api.staff.get_staff_directory",
-			params ?? {},
-		).then((res) => ({ teachingStaff: res.teaching_staff, nonTeachingStaff: res.non_teaching_staff })),
-
-	listCourses: (params?: { department?: string }) =>
-		callMethod<CourseRow[]>("zenvora_education.api.course.list_courses", params),
-
-	createCourse: (params: { course_name: string; department?: string; description?: string }) =>
-		callMethod("zenvora_education.api.course.create_course", params, { method: "POST" }),
-
-	listStudents: (params?: { search?: string; program?: string; student_group?: string }) =>
-		callMethod<StudentRow[]>("zenvora_education.api.student.list_students", params),
-
-	getResults: (params?: { student_group?: string }) =>
-		callMethod<ResultRow[]>("zenvora_education.api.exam.get_results", params),
-
-	getMyResults: () => callMethod<ResultRow[]>("zenvora_education.api.exam.get_my_results"),
-
-	getFees: (params?: { student?: string }) => callMethod<FeeRow[]>("zenvora_education.api.fees.get_fees", params),
-
-	getMyFees: () => callMethod<FeeRow[]>("zenvora_education.api.fees.get_my_fees"),
-
-	createStudent: (params: {
-		first_name: string;
-		student_email_id: string;
-		program: string;
-		academic_year: string;
-		last_name?: string;
-		date_of_birth?: string;
-		gender?: string;
-		academic_term?: string;
-		student_group?: string;
-	}) => callMethod("zenvora_education.api.student.create_student", params, { method: "POST" }),
-
-	listPrograms: () => callMethod<ProgramRow[]>("zenvora_education.api.settings.list_programs"),
-
-	createProgram: (params: { program_name: string; department?: string }) =>
-		callMethod("zenvora_education.api.settings.create_program", params, { method: "POST" }),
-
-	listAcademicYears: () => callMethod<AcademicYearRow[]>("zenvora_education.api.settings.list_academic_years"),
-
-	createAcademicYear: (params: { academic_year_name: string; year_start_date: string; year_end_date: string }) =>
-		callMethod("zenvora_education.api.settings.create_academic_year", params, { method: "POST" }),
-
-	listAcademicTerms: (params?: { academic_year?: string }) =>
-		callMethod<AcademicTermRow[]>("zenvora_education.api.settings.list_academic_terms", params),
-
-	createAcademicTerm: (params: {
-		academic_year: string;
-		term_name: string;
-		term_start_date: string;
-		term_end_date: string;
-	}) => callMethod("zenvora_education.api.settings.create_academic_term", params, { method: "POST" }),
-
-	getRecord: (resource: string, name: string) =>
-		callMethod<Record<string, string | Array<Record<string, string>>>>("zenvora_education.api.crud.get_record", {
-			resource,
-			name,
-		}),
-
-	updateRecord: (resource: string, name: string, values: Record<string, unknown>) =>
-		callMethod<string>("zenvora_education.api.crud.update_record", { resource, name, values }, { method: "POST" }),
-
-	deleteRecords: (resource: string, names: string[]) =>
-		callMethod<{ name: string; ok: boolean; message: string }[]>(
-			"zenvora_education.api.crud.delete_records",
-			{ resource, names },
-			{ method: "POST" },
-		),
-
-	listInstructors: () => callMethod<InstructorRow[]>("zenvora_education.api.schedule.list_instructors"),
-
-	listRooms: () => callMethod<RoomRow[]>("zenvora_education.api.schedule.list_rooms"),
-
-	getTimetableOptions: () => callMethod<TimetableOptions>("zenvora_education.api.timetable.get_timetable_options"),
-	getTimetable: (student_group: string, from_date: string, to_date: string) =>
-		callMethod<TimetableRow[]>("zenvora_education.api.timetable.get_timetable", { student_group, from_date, to_date }),
-	getMyTimetable: (from_date: string, to_date: string) =>
-		callMethod<TimetableRow[]>("zenvora_education.api.timetable.get_my_timetable", { from_date, to_date }),
-
-	listCourseSchedules: () =>
-		callMethod<CourseScheduleRow[]>("zenvora_education.api.schedule.list_course_schedules"),
-
-	createCourseSchedule: (params: {
-		student_group: string;
-		course: string;
-		instructor: string;
-		room: string;
-		schedule_date: string;
-		from_time: string;
-		to_time: string;
-		class_schedule_color?: string;
-	}) => callMethod("zenvora_education.api.schedule.create_course_schedule", params, { method: "POST" }),
-
-	createCourseSchedulesBulk: (params: {
-		student_group: string;
-		course: string;
-		instructor: string;
-		room: string;
-		from_time: string;
-		to_time: string;
-		start_date: string;
-		end_date: string;
-		days: string[];
-		class_schedule_color?: string;
-	}) =>
-		callMethod<{ created: number; skipped: { date: string; reason: string }[] }>(
-			"zenvora_education.api.schedule.create_course_schedules_bulk",
-			params,
-			{ method: "POST" },
-		),
-
-	listCompanies: () => callMethod<CompanyRow[]>("zenvora_education.api.settings.list_companies"),
-
-	listDesignations: () => callMethod<DesignationRow[]>("zenvora_education.api.staff.list_designations"),
-
-	listDepartments: () => callMethod<DepartmentRow[]>("zenvora_education.api.settings.list_departments"),
-
-	createDepartment: (params: { department_name: string; company?: string }) =>
-		callMethod("zenvora_education.api.settings.create_department", params, { method: "POST" }),
-
-	listStudentGroups: () => callMethod<StudentGroupRow[]>("zenvora_education.api.settings.list_student_groups"),
-
-	createStudentGroup: (params: {
-		student_group_name: string;
-		program: string;
-		academic_year: string;
-		academic_term?: string;
-		max_strength?: number;
-	}) => callMethod("zenvora_education.api.settings.create_student_group", params, { method: "POST" }),
-
-	listFeeCategories: () => callMethod<FeeCategoryRow[]>("zenvora_education.api.settings.list_fee_categories"),
-
-	createFeeCategory: (params: { category_name: string }) =>
-		callMethod("zenvora_education.api.settings.create_fee_category", params, { method: "POST" }),
-
-	listFeeStructures: () => callMethod<FeeStructureRow[]>("zenvora_education.api.settings.list_fee_structures"),
-
-	createFeeStructure: (params: {
-		program: string;
-		academic_year: string;
-		academic_term?: string;
-		components: { fees_category: string; amount: number }[];
-	}) => callMethod("zenvora_education.api.settings.create_fee_structure", params, { method: "POST" }),
+	fees: {
+		invoices: (q?: { status?: InvoiceStatus; classId?: string; studentId?: string; feeStructureId?: string; overdue?: boolean; search?: string }) =>
+			get<Invoice[]>("/school/fees/invoices", q),
+		invoice: (id: string) => get<InvoiceDetail>(`/school/fees/invoices/${id}`),
+		generate: (body: { feeStructureId: string; dueDate: string; issueDate?: string }) =>
+			post<{ created: number; alreadyBilled: number; totalPerStudent: number }>("/school/fees/invoices/generate", body),
+		pay: (id: string, body: { amount: number; method: PaymentMethod; reference?: string | null; paidOn: string }) =>
+			post<{ paid: number; outstanding: number; status: InvoiceStatus }>(`/school/fees/invoices/${id}/payments`, body),
+		cancel: (id: string) => post<void>(`/school/fees/invoices/${id}/cancel`),
+		mine: () => get<Invoice[]>("/school/fees/mine"),
+	},
 };
+
+export interface StaffInput {
+	firstName: string;
+	lastName?: string | null;
+	gender: string;
+	dateOfBirth: string;
+	departmentId: string;
+	designationId: string;
+	dateOfJoining: string;
+	email?: string | null;
+	phone?: string | null;
+	isTeacher?: boolean;
+}
+
+export interface StudentInput {
+	firstName: string;
+	lastName?: string | null;
+	email?: string | null;
+	admissionNo?: string | null;
+	dateOfBirth?: string | null;
+	gender?: string | null;
+	classId: string;
+	sectionId?: string | null;
+}
+
+export interface SlotInput {
+	sectionId: string;
+	subjectId: string;
+	teacherId: string;
+	roomId: string;
+	date: string;
+	startTime: string;
+	endTime: string;
+	color?: string | null;
+}
+
+export interface ExamInput {
+	name: string;
+	academicYearId: string;
+	academicTermId?: string | null;
+	startDate?: string | null;
+	endDate?: string | null;
+}

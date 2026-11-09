@@ -1,21 +1,24 @@
 <script setup lang="ts">
-import { api } from "@/lib/api";
+import { api, deleteEach } from "@/lib/api";
 import { useList } from "@/lib/useList";
 import type { FieldDef, Values } from "@/lib/resource";
 import ResourcePage from "@/components/ResourcePage.vue";
 
-const { rows, load } = useList(api.listPrograms);
-const { rows: departments } = useList(api.listDepartments);
+const { rows, load } = useList(() => api.classes.list());
+const { rows: departments } = useList(() => api.departments.list());
 
 const fields = (): FieldDef[] => [
-	{ key: "program_name", label: "Class Name", type: "text", required: true, placeholder: "e.g. Grade 10" },
+	{ key: "name", label: "Class Name", type: "text", required: true, placeholder: "e.g. Grade 10" },
 	{
-		key: "department",
+		key: "departmentId",
 		label: "Department",
 		type: "select",
-		options: departments.value.map((d) => ({ value: d.name, label: d.department_name })),
+		placeholder: "No department",
+		options: departments.value.map((d) => ({ value: d.id, label: d.name })),
 	},
 ];
+
+const values = (v: Values) => ({ name: v.name as string, departmentId: (v.departmentId as string) || null });
 </script>
 
 <template>
@@ -24,21 +27,22 @@ const fields = (): FieldDef[] => [
 		singular="Class"
 		description="The class or grade a student is enrolled in, e.g. Grade 1 to Grade 10"
 		:rows="rows"
-		:row-key="(r) => r.name"
-		:row-label="(r) => r.program_name"
+		:row-key="(r) => r.id"
+		:row-label="(r) => r.name"
 		search-placeholder="Search classes..."
-		:search-value="(r) => r.program_name"
+		:search-value="(r) => r.name"
 		empty-label="No classes yet."
 		:columns="[
-			{ key: 'program_name', label: 'Class', sortable: true, value: (r) => r.program_name },
-			{ key: 'department', label: 'Department', sortable: true, value: (r) => r.department || '-' },
+			{ key: 'name', label: 'Class', sortable: true, value: (r) => r.name },
+			{ key: 'department', label: 'Department', sortable: true, value: (r) => r.department?.name ?? '-' },
+			{ key: 'sectionCount', label: 'Sections', sortable: true, align: 'right', value: (r) => r.sectionCount },
 		]"
 		:fields="fields()"
-		:empty-values="(): Values => ({ program_name: '', department: '' })"
+		:empty-values="(): Values => ({ name: '', departmentId: '' })"
 		:reload="load"
-		:on-create="(v) => api.createProgram({ program_name: v.program_name as string, department: (v.department as string) || undefined })"
-		:load-for-edit="async (r) => ({ program_name: r.program_name, department: r.department || '' })"
-		:on-update="(r, v) => api.updateRecord('program', r.name, { program_name: v.program_name, department: v.department })"
-		:on-delete="(list) => api.deleteRecords('program', list.map((r) => r.name))"
+		:on-create="(v) => api.classes.create(values(v))"
+		:load-for-edit="async (r) => ({ name: r.name, departmentId: r.departmentId ?? '' })"
+		:on-update="(r, v) => api.classes.update(r.id, values(v))"
+		:on-delete="(list) => deleteEach(list, (r) => r.name, (r) => api.classes.remove(r.id))"
 	/>
 </template>
