@@ -14,6 +14,7 @@ import Modal from "@/components/Modal.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import ErrorState from "@/components/ErrorState.vue";
+import Chip from "@/components/Chip.vue";
 
 const { role } = storeToRefs(useSession());
 const isAdmin = computed(() => role.value === "admin");
@@ -110,15 +111,38 @@ watch(
 const groupText = (r: TimetableRow) => [r.program, r.student_group_name].filter(Boolean).join(" - ");
 const otherText = (r: TimetableRow) => (isTeacher.value ? groupText(r) : r.instructor_name);
 
+// --- Static placeholder: teacher leave / substitute -----------------------------------------
+// There's no Leave / Substitute API yet, so this stands in for it: a handful of lessons per
+// week are deterministically (not randomly - same lesson always shows the same thing) marked
+// as the teacher being on leave, with or without a substitute covering the class. Swap
+// `leaveInfo` for a real lookup once the backend has one.
+type LeaveStatus = "scheduled" | "leave" | "substitute";
+const SUBSTITUTES = ["Ms. Kavita Nair", "Mr. Rohan Mehta", "Mrs. Anjali Verma", "Mr. Farhan Ali"];
+const hashOf = (s: string) => {
+	let h = 0;
+	for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+	return h;
+};
+const leaveInfo = (r: TimetableRow): { status: LeaveStatus; substitute?: string } => {
+	const h = hashOf(r.name || `${r.schedule_date}-${r.from_time}-${r.instructor}`);
+	if (h % 9 === 0) return { status: "leave" };
+	if (h % 9 === 1) return { status: "substitute", substitute: SUBSTITUTES[h % SUBSTITUTES.length] };
+	return { status: "scheduled" };
+};
+// ----------------------------------------------------------------------------------------------
+
 const events = computed<EventInput[]>(() =>
-	rows.value.map((r) => ({
-		title: r.course_name,
-		start: `${r.schedule_date}T${hhmm(r.from_time)}:00`,
-		end: `${r.schedule_date}T${hhmm(r.to_time)}:00`,
-		backgroundColor: "transparent",
-		borderColor: "transparent",
-		extendedProps: { other: otherText(r), room: r.room_name, color: colorOf(r.color) },
-	})),
+	rows.value.map((r) => {
+		const leave = leaveInfo(r);
+		return {
+			title: r.course_name,
+			start: `${r.schedule_date}T${hhmm(r.from_time)}:00`,
+			end: `${r.schedule_date}T${hhmm(r.to_time)}:00`,
+			backgroundColor: "transparent",
+			borderColor: "transparent",
+			extendedProps: { other: otherText(r), room: r.room_name, color: colorOf(r.color), ...leave },
+		};
+	}),
 );
 
 // Day popup.
@@ -131,6 +155,8 @@ interface Row {
 	other?: string;
 	room?: string;
 	color?: string;
+	status?: LeaveStatus;
+	substitute?: string;
 }
 
 const selectedDate = ref<Date | null>(null);
@@ -146,7 +172,17 @@ const dayRows = computed<Row[]>(() => {
 		const prev = lessons[i - 1];
 		// A section's gap is a break; a teacher's gap is just free time, so no row for it.
 		if (!isTeacher.value && prev && mins(start) - mins(prev.end) >= 15) out.push({ kind: "break", start: prev.end, end: start });
-		out.push({ kind: "lesson", period: i + 1, start, end, course: r.course_name, other: otherText(r), room: r.room_name, color: colorOf(r.color) });
+		out.push({
+			kind: "lesson",
+			period: i + 1,
+			start,
+			end,
+			course: r.course_name,
+			other: otherText(r),
+			room: r.room_name,
+			color: colorOf(r.color),
+			...leaveInfo(r),
+		});
 	});
 	return out;
 });
@@ -192,23 +228,44 @@ const options = computed<CalendarOptions>(() => ({
 	events: events.value,
 	eventContent: (arg) => {
 		const el = document.createElement("div");
-		const { other, room, color } = arg.event.extendedProps;
+		const { other, room, color, status, substitute } = arg.event.extendedProps as {
+			other: string;
+			room: string;
+			color: string;
+			status: LeaveStatus;
+			substitute?: string;
+		};
 		el.style.setProperty("--c", color);
+		const flagClass = status === "leave" ? " tt-leave" : status === "substitute" ? " tt-substitute" : "";
 		if (arg.view.type === "dayGridMonth") {
-			el.className = "tt-pill";
-			el.innerHTML = `<i></i><span class="tt-pill-time"></span><b></b>`;
+			el.className = "tt-pill" + flagClass;
+			el.innerHTML = `<i></i><span class="tt-pill-time"></span><b></b><span class="tt-pill-flag"></span>`;
 			el.querySelector(".tt-pill-time")!.textContent = arg.timeText.slice(0, 5);
 			el.querySelector("b")!.textContent = arg.event.title;
+			el.querySelector(".tt-pill-flag")!.textContent = status === "leave" ? "\u{1F6AB}" : status === "substitute" ? "\u{1F501}" : "";
 			return { domNodes: [el] };
 		}
-		el.className = "tt-block";
+		el.className = "tt-block" + flagClass;
 		const t = document.createElement("div");
 		t.className = "tt-block-title";
 		t.textContent = arg.event.title;
+		el.append(t);
+		if (status === "leave") {
+			const badge = document.createElement("div");
+			badge.className = "tt-badge tt-badge-leave";
+			badge.textContent = "On leave · no substitute";
+			el.append(badge);
+		} else if (status === "substitute") {
+			const badge = document.createElement("div");
+			badge.className = "tt-badge tt-badge-sub";
+			badge.textContent = `Substitute: ${substitute}`;
+			el.append(badge);
+		}
 		const m = document.createElement("div");
 		m.className = "tt-block-meta";
-		m.textContent = [other, room].filter(Boolean).join(" · ");
-		el.append(t, m);
+		if (status === "leave") m.innerHTML = `<s>${other}</s>`;
+		else m.textContent = [other, room].filter(Boolean).join(" · ");
+		el.append(m);
 		return { domNodes: [el] };
 	},
 }));
@@ -240,7 +297,13 @@ const options = computed<CalendarOptions>(() => ({
 
 		<ErrorState v-if="error" :message="error" />
 		<div v-if="ready" class="timetable rounded-xl border border-line bg-surface p-4" :class="{ 'opacity-70': loading }">
-			<p class="mb-3 text-sm font-medium">{{ heading }}</p>
+			<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+				<p class="text-sm font-medium">{{ heading }}</p>
+				<div class="flex flex-wrap items-center gap-1.5">
+					<Chip tone="bad">🚫 On leave</Chip>
+					<Chip tone="warn">🔁 Substitute assigned</Chip>
+				</div>
+			</div>
 			<FullCalendar :options="options" />
 		</div>
 		<EmptyState v-else label="Choose a section to view its time table." />
@@ -254,7 +317,8 @@ const options = computed<CalendarOptions>(() => ({
 							<th class="py-2 pr-3 font-medium">Time</th>
 							<th class="py-2 pr-3 font-medium">Subject</th>
 							<th class="py-2 pr-3 font-medium">{{ isTeacher ? "Class" : "Teacher" }}</th>
-							<th class="py-2 font-medium">Room</th>
+							<th class="py-2 pr-3 font-medium">Room</th>
+							<th class="py-2 font-medium">Status</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -262,7 +326,7 @@ const options = computed<CalendarOptions>(() => ({
 							<tr v-if="r.kind === 'break'" class="border-b border-line bg-mint/60 text-black/60">
 								<td class="py-2 pr-3" />
 								<td class="whitespace-nowrap py-2 pr-3">{{ r.start }} - {{ r.end }}</td>
-								<td colspan="3" class="py-2 italic">Break</td>
+								<td colspan="4" class="py-2 italic">Break</td>
 							</tr>
 							<tr v-else class="border-b border-line last:border-0">
 								<td class="py-2.5 pr-3 text-black/50">{{ r.period }}</td>
@@ -270,8 +334,13 @@ const options = computed<CalendarOptions>(() => ({
 								<td class="py-2.5 pr-3 font-medium">
 									<span class="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" :style="{ background: r.color }" />{{ r.course }}
 								</td>
-								<td class="py-2.5 pr-3">{{ r.other }}</td>
-								<td class="py-2.5">{{ r.room }}</td>
+								<td class="py-2.5 pr-3" :class="{ 'text-black/40 line-through': r.status === 'leave' }">{{ r.other }}</td>
+								<td class="py-2.5 pr-3">{{ r.room }}</td>
+								<td class="py-2.5">
+									<Chip v-if="r.status === 'leave'" tone="bad">On leave</Chip>
+									<Chip v-else-if="r.status === 'substitute'" tone="warn">Sub: {{ r.substitute }}</Chip>
+									<Chip v-else tone="ok">Scheduled</Chip>
+								</td>
 							</tr>
 						</template>
 					</tbody>
@@ -326,4 +395,14 @@ const options = computed<CalendarOptions>(() => ({
 .timetable .tt-block { height: 100%; overflow: hidden; border-radius: 8px; border-left: 4px solid var(--c); padding: 0.3rem 0.5rem; background: color-mix(in srgb, var(--c) 13%, white); color: #222; line-height: 1.25; }
 .timetable .tt-block-title { font-size: 0.8125rem; font-weight: 600; }
 .timetable .tt-block-meta { font-size: 0.6875rem; color: #555; }
+.timetable .tt-badge { display: inline-block; margin-top: 1px; border-radius: 4px; padding: 0 4px; font-size: 0.625rem; font-weight: 600; line-height: 1.4; }
+.timetable .tt-badge-leave { background: #fee2e2; color: #b91c1c; }
+.timetable .tt-badge-sub { background: #fef3c7; color: #92400e; }
+.timetable .tt-pill.tt-leave { background: #fee2e2; opacity: 0.85; }
+.timetable .tt-pill.tt-leave i { background: #dc2626; }
+.timetable .tt-pill.tt-substitute { background: #fef3c7; }
+.timetable .tt-pill.tt-substitute i { background: #d97706; }
+.timetable .tt-pill-flag { margin-left: auto; flex: none; font-size: 0.7rem; line-height: 1; }
+.timetable .tt-block.tt-leave { border-left-color: #dc2626; background: #fef2f2; }
+.timetable .tt-block.tt-substitute { border-left-color: #d97706; background: #fffbeb; }
 </style>
