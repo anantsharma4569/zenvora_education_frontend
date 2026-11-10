@@ -20,13 +20,15 @@ import AttentionItem from "@/components/AttentionItem.vue";
  * The question a principal opens this page with is "what do I need to do
  * today", not "how many students exist" - every panel below the stat strip
  * is either an exception to act on or a trend that puts today's number in
- * context. All of it comes from get_dashboard; nothing here is a fixture.
+ * context. All of it comes from GET /school/dashboard; nothing here is a fixture.
  */
 
 const NUM = new Intl.NumberFormat("en-IN");
 const LINK = "cursor-pointer text-[12.5px] text-black/50 hover:text-black";
 
-const formatINR = (amount: number) => {
+/** Amounts from the API are in paise. */
+const formatINR = (paise: number) => {
+	const amount = paise / 100;
 	if (amount >= 1e7) return `₹${(amount / 1e7).toFixed(2)} Cr`;
 	if (amount >= 1e5) return `₹${(amount / 1e5).toFixed(1)} L`;
 	return `₹${NUM.format(Math.round(amount))}`;
@@ -51,8 +53,7 @@ watch(
 	() => {
 		data.value = null;
 		error.value = null;
-		api
-			.getDashboard()
+		api.dashboard()
 			.then((res) => (data.value = res))
 			.catch((err) => (error.value = err.message));
 	},
@@ -61,18 +62,18 @@ watch(
 
 const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
 
-const present = computed(() => data.value?.today_present ?? 0);
-const absent = computed(() => data.value?.today_absent ?? 0);
+const present = computed(() => data.value?.todayPresent ?? 0);
+const absent = computed(() => data.value?.todayAbsent ?? 0);
 const marked = computed(() => present.value + absent.value);
 const rate = computed(() => (marked.value ? (present.value / marked.value) * 100 : 0));
 
-const groups = computed(() => data.value?.attendance_by_group ?? []);
-const trend = computed(() => data.value?.attendance_trend ?? []);
-const grades = computed(() => data.value?.grade_distribution ?? []);
-const fees = computed(() => data.value?.fees_summary);
-const exam = computed(() => data.value?.exam_summary);
-const staff = computed(() => data.value?.staff_today);
-const lowAttendanceCount = computed(() => data.value?.low_attendance_count ?? 0);
+const groups = computed(() => data.value?.attendanceByGroup ?? []);
+const trend = computed(() => data.value?.attendanceTrend ?? []);
+const grades = computed(() => data.value?.gradeDistribution ?? []);
+const fees = computed(() => data.value?.feesSummary);
+const exam = computed(() => data.value?.examSummary);
+const staff = computed(() => data.value?.staffToday);
+const lowAttendanceCount = computed(() => data.value?.lowAttendanceCount ?? 0);
 
 const trendColumns = computed(() => {
 	const t = trend.value;
@@ -85,7 +86,7 @@ const trendColumns = computed(() => {
 
 const collectedPct = computed(() => (fees.value && fees.value.billed ? (fees.value.collected / fees.value.billed) * 100 : 0));
 const outstandingPct = computed(() => (fees.value && fees.value.billed ? (fees.value.outstanding / fees.value.billed) * 100 : 0));
-const pendingGroups = computed(() => (exam.value ? Math.max(0, exam.value.total_groups - exam.value.published_groups) : 0));
+const pendingGroups = computed(() => (exam.value ? Math.max(0, exam.value.totalGroups - exam.value.publishedGroups) : 0));
 const maxGradeValue = computed(() => Math.max(1, ...grades.value.map((g) => g.value)));
 
 const attentionItems = computed(() => {
@@ -102,10 +103,10 @@ const attentionItems = computed(() => {
 			href: "/attendance",
 		});
 	}
-	if (f && f.unpaid_students > 0) {
+	if (f && f.unpaidStudents > 0) {
 		items.push({
 			tone: "danger",
-			title: `${f.unpaid_students} student${f.unpaid_students === 1 ? "" : "s"} past fee due date`,
+			title: `${f.unpaidStudents} student${f.unpaidStudents === 1 ? "" : "s"} past fee due date`,
 			meta: `${formatINR(f.overdue)} overdue`,
 			href: "/fees",
 		});
@@ -121,15 +122,15 @@ const attentionItems = computed(() => {
 	if (pendingGroups.value > 0 && e) {
 		items.push({
 			tone: "warn",
-			title: `Results pending for ${pendingGroups.value} student group${pendingGroups.value === 1 ? "" : "s"}`,
-			meta: `${e.published_groups} of ${e.total_groups} groups published`,
+			title: `Results pending for ${pendingGroups.value} exam${pendingGroups.value === 1 ? "" : "s"}`,
+			meta: `${e.publishedGroups} of ${e.totalGroups} exams published`,
 			href: "/exams",
 		});
 	}
-	if (s && s.on_leave > 0) {
+	if (s && s.onLeave > 0) {
 		items.push({
 			tone: "neutral",
-			title: `${s.on_leave} staff member${s.on_leave === 1 ? "" : "s"} on approved leave today`,
+			title: `${s.onLeave} staff member${s.onLeave === 1 ? "" : "s"} on approved leave today`,
 			meta: "Staff",
 			href: "/staff",
 		});
@@ -139,8 +140,8 @@ const attentionItems = computed(() => {
 
 const staffRows = computed(() => [
 	{ label: "Present", value: staff.value?.present ?? 0, dot: "bg-pos" },
-	{ label: "On approved leave", value: staff.value?.on_leave ?? 0, dot: "bg-black/30" },
-	{ label: "Absent, unapproved", value: staff.value?.absent_unapproved ?? 0, dot: "bg-danger" },
+	{ label: "On approved leave", value: staff.value?.onLeave ?? 0, dot: "bg-black/30" },
+	{ label: "Absent, unapproved", value: staff.value?.absentUnapproved ?? 0, dot: "bg-danger" },
 	{ label: "Not yet marked", value: staff.value?.unmarked ?? 0, dot: "bg-black/30" },
 ]);
 </script>
@@ -170,7 +171,7 @@ const staffRows = computed(() => [
 		<section class="grid grid-cols-[repeat(auto-fit,minmax(158px,1fr))] gap-[13px]">
 			<component
 				:is="isAdmin ? 'RouterLink' : 'div'"
-				:to="isAdmin ? '/attendance?status=Present' : undefined"
+				:to="isAdmin ? '/attendance?status=PRESENT' : undefined"
 				class="flex min-h-[116px] flex-col justify-between rounded-xl border border-line bg-surface p-[16px_18px]"
 				:class="isAdmin ? 'cursor-pointer transition-colors hover:border-accent hover:bg-mint/40' : ''"
 			>
@@ -180,25 +181,25 @@ const staffRows = computed(() => [
 				</div>
 				<div class="mt-2.5"><Bar :pct="rate" /></div>
 			</component>
-			<StatCard label="Students" :value="NUM.format(data.student_count ?? 0)" :to="isAdmin ? '/students' : undefined" />
+			<StatCard label="Students" :value="NUM.format(data.studentCount ?? 0)" :to="isAdmin ? '/students' : undefined" />
 			<StatCard
 				label="Present"
 				:value="NUM.format(present)"
 				:note="`of ${NUM.format(marked)} marked`"
-				:to="isAdmin ? '/attendance?status=Present' : undefined"
+				:to="isAdmin ? '/attendance?status=PRESENT' : undefined"
 			/>
-			<StatCard label="Absent" :value="NUM.format(absent)" tone="warn" :to="isAdmin ? '/attendance?status=Absent' : undefined" />
+			<StatCard label="Absent" :value="NUM.format(absent)" tone="warn" :to="isAdmin ? '/attendance?status=ABSENT' : undefined" />
 			<StatCard
 				:to="isAdmin ? '/staff?tab=teaching' : undefined"
 				label="Instructors"
-				:value="NUM.format(data.instructor_count ?? 0)"
-				:note="`${NUM.format(data.employee_count ?? 0)} employees`"
+				:value="NUM.format(data.instructorCount ?? 0)"
+				:note="`${NUM.format(data.employeeCount ?? 0)} employees`"
 			/>
 		</section>
 
 		<section class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-start gap-4">
 			<Card>
-				<CardHead title="Attendance by student group">
+				<CardHead title="Attendance by section">
 					<template #action><RouterLink to="/attendance" :class="LINK">All groups →</RouterLink></template>
 				</CardHead>
 				<p class="mb-[18px] mt-1 text-[12.5px] text-black/50">Marked for today. Groups under 85% are flagged.</p>
@@ -264,7 +265,7 @@ const staffRows = computed(() => [
 							</div>
 							<div>
 								<Label>Students</Label>
-								<div class="mt-1 text-sm font-semibold">{{ fees.unpaid_students }} unpaid</div>
+								<div class="mt-1 text-sm font-semibold">{{ fees.unpaidStudents }} unpaid</div>
 							</div>
 						</div>
 					</template>
@@ -277,11 +278,11 @@ const staffRows = computed(() => [
 				<CardHead title="Mid-term results">
 					<template #action><RouterLink to="/exams" :class="LINK">Open exams →</RouterLink></template>
 				</CardHead>
-				<p v-if="!exam || exam.total_results === 0" class="mt-1.5 text-[13px] text-black/45">No results published yet.</p>
+				<p v-if="!exam || exam.totalResults === 0" class="mt-1.5 text-[13px] text-black/45">No results published yet.</p>
 				<template v-else>
 					<p class="mb-[18px] mt-1.5 text-[12.5px] text-black/50">
-						Published for {{ exam.published_groups }} of {{ exam.total_groups }} groups ·
-						{{ NUM.format(exam.total_results) }} result records
+						Published for {{ exam.publishedGroups }} of {{ exam.totalGroups }} groups ·
+						{{ NUM.format(exam.totalResults) }} result records
 					</p>
 					<div class="flex items-end gap-2" style="height: 88px">
 						<div v-for="g in grades" :key="g.label" class="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-[7px]">
@@ -291,9 +292,9 @@ const staffRows = computed(() => [
 						</div>
 					</div>
 					<div class="mt-[18px] flex flex-wrap gap-[22px] border-t border-line-soft pt-4">
-						<div><Label>Pass rate</Label><div class="mt-1 text-base font-semibold">{{ exam.pass_rate }}%</div></div>
-						<div><Label>Median score</Label><div class="mt-1 text-base font-semibold">{{ exam.median_score }} / 100</div></div>
-						<div><Label>Below 40</Label><div class="mt-1 text-base font-semibold text-danger">{{ exam.below_40 }}</div></div>
+						<div><Label>Pass rate</Label><div class="mt-1 text-base font-semibold">{{ exam.passRate }}%</div></div>
+						<div><Label>Median score</Label><div class="mt-1 text-base font-semibold">{{ exam.medianScore }} / 100</div></div>
+						<div><Label>Below 40</Label><div class="mt-1 text-base font-semibold text-danger">{{ exam.below40 }}</div></div>
 					</div>
 				</template>
 			</Card>
@@ -303,7 +304,7 @@ const staffRows = computed(() => [
 					<template #action><RouterLink to="/staff" :class="LINK">Staff →</RouterLink></template>
 				</CardHead>
 				<p class="mb-4 mt-1.5 text-[12.5px] text-black/50">
-					{{ NUM.format(data.employee_count ?? 0) }} employees · {{ NUM.format(data.instructor_count ?? 0) }} instructors
+					{{ NUM.format(data.employeeCount ?? 0) }} employees · {{ NUM.format(data.instructorCount ?? 0) }} teachers
 				</p>
 				<div class="flex flex-col">
 					<div v-for="s in staffRows" :key="s.label" class="flex items-center justify-between gap-4 border-b border-line-soft py-2.5">
